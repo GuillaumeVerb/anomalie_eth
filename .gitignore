@@ -4,31 +4,26 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Data
-data/raw/
-data/processed/
-
-# Environnement
 venv/
 .env
+
+# Data files
+data/raw/*.csv
+data/processed/*.csv
+anomalies_*.csv
+anomalies.csv
 
 # IDE
 .vscode/
 .idea/
-EOL 
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log 
