@@ -1,0 +1,11 @@
+pandas==2.0.0
+numpy==1.24.0
+scikit-learn==1.2.0
+web3
+streamlit
+python-dotenv==1.0.0
+pytest==7.3.1
+jupyter==1.0.0
+tqdm==4.65.0
+matplotlib==3.7.1
+seaborn==0.12.2
