@@ -7,6 +7,9 @@ from sklearn.metrics import silhouette_score
 import logging
 import sys
 from pathlib import Path
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.metrics import make_scorer, silhouette_score
+from sklearn.base import BaseEstimator, ClassifierMixin
 
 from src.config import (
     ISOLATION_FOREST_PARAMS,
@@ -20,6 +23,80 @@ from src.config import (
 # Logging configuration
 logging.basicConfig(level=LOG_LEVEL, format=LOG_FORMAT)
 logger = logging.getLogger(__name__)
+
+class IsolationForestWrapper(BaseEstimator, ClassifierMixin):
+    """Wrapper class to make IsolationForest compatible with GridSearchCV"""
+    def __init__(self, n_estimators=100, max_samples=1.0, contamination=0.1):
+        self.n_estimators = n_estimators
+        self.max_samples = max_samples
+        self.contamination = contamination
+        self.model = None
+        
+    def fit(self, X, y=None):
+        self.model = IsolationForest(
+            n_estimators=self.n_estimators,
+            max_samples=self.max_samples,
+            contamination=self.contamination,
+            random_state=42
+        )
+        self.model.fit(X)
+        return self
+    
+    def predict(self, X):
+        return self.model.predict(X)
+    
+    def score(self, X, y=None):
+        """Custom scoring using silhouette score"""
+        predictions = self.model.predict(X)
+        # Convert predictions from {-1, 1} to {0, 1} for anomaly labels
+        labels = np.where(predictions == 1, 0, 1)
+        
+        # Calculate silhouette score only for normal points (label 0)
+        mask = labels == 0
+        if sum(mask) < 2:  # Need at least 2 points for silhouette score
+            return -1
+        
+        try:
+            score = silhouette_score(X[mask], labels[mask])
+            return score
+        except:
+            return -1
+
+class DBSCANWrapper(BaseEstimator, ClassifierMixin):
+    """Wrapper class to make DBSCAN compatible with RandomizedSearchCV"""
+    def __init__(self, eps=0.5, min_samples=5):
+        self.eps = eps
+        self.min_samples = min_samples
+        self.model = None
+        
+    def fit(self, X, y=None):
+        self.model = DBSCAN(
+            eps=self.eps,
+            min_samples=self.min_samples
+        )
+        self.model.fit(X)
+        return self
+    
+    def predict(self, X):
+        # For DBSCAN, we need to use the fitted model's labels_
+        return self.model.fit_predict(X)
+    
+    def score(self, X, y=None):
+        """Custom scoring using silhouette score"""
+        labels = self.predict(X)
+        # Convert to binary labels (0: normal, 1: anomaly)
+        binary_labels = np.where(labels == -1, 1, 0)
+        
+        # Calculate silhouette score only for normal points (label 0)
+        mask = binary_labels == 0
+        if sum(mask) < 2:  # Need at least 2 points for silhouette score
+            return -1
+        
+        try:
+            score = silhouette_score(X[mask], binary_labels[mask])
+            return score
+        except:
+            return -1
 
 def prepare_features(df):
     """
@@ -161,6 +238,121 @@ def anomaly_detection_pipeline(df, model_type="IF"):
         
     except Exception as e:
         logger.error(f"Error in anomaly detection pipeline: {str(e)}")
+        raise
+
+def tune_isolation_forest(X):
+    """
+    Tune IsolationForest hyperparameters using GridSearchCV.
+    
+    Args:
+        X (np.array): Feature matrix
+    
+    Returns:
+        dict: Best parameters
+        IsolationForest: Best model
+    """
+    try:
+        logger.info("Starting IsolationForest hyperparameter tuning")
+        
+        # Define parameter grid
+        param_grid = {
+            'n_estimators': [50, 100, 200],
+            'max_samples': [0.5, 1.0],
+            'contamination': [0.01, 0.02, 0.05]
+        }
+        
+        # Create wrapper model
+        base_model = IsolationForestWrapper()
+        
+        # Create GridSearchCV
+        grid_search = GridSearchCV(
+            estimator=base_model,
+            param_grid=param_grid,
+            cv=5,
+            scoring='neg_mean_squared_error',  # We'll use the built-in scoring from our wrapper
+            n_jobs=-1,
+            verbose=1
+        )
+        
+        # Fit GridSearchCV
+        grid_search.fit(X)
+        
+        # Get best parameters and model
+        best_params = grid_search.best_params_
+        
+        # Create best model
+        best_model = IsolationForest(
+            n_estimators=best_params['n_estimators'],
+            max_samples=best_params['max_samples'],
+            contamination=best_params['contamination'],
+            random_state=42
+        )
+        best_model.fit(X)
+        
+        logger.info(f"Best parameters found: {best_params}")
+        logger.info(f"Best score: {grid_search.best_score_:.3f}")
+        
+        return best_params, best_model
+        
+    except Exception as e:
+        logger.error(f"Error in IsolationForest tuning: {str(e)}")
+        raise
+
+def tune_dbscan(X):
+    """
+    Tune DBSCAN hyperparameters using RandomizedSearchCV.
+    
+    Args:
+        X (np.array): Feature matrix
+    
+    Returns:
+        dict: Best parameters
+        DBSCAN: Best model
+    """
+    try:
+        logger.info("Starting DBSCAN hyperparameter tuning")
+        
+        # Define parameter grid
+        param_distributions = {
+            'eps': [0.3, 0.5, 0.7, 1.0],
+            'min_samples': [3, 5, 10]
+        }
+        
+        # Create wrapper model
+        base_model = DBSCANWrapper()
+        
+        # Create RandomizedSearchCV
+        random_search = RandomizedSearchCV(
+            estimator=base_model,
+            param_distributions=param_distributions,
+            n_iter=8,  # Number of parameter settings sampled
+            cv=5,
+            scoring='neg_mean_squared_error',  # We'll use the built-in scoring from our wrapper
+            n_jobs=-1,
+            verbose=1,
+            random_state=42
+        )
+        
+        # Fit RandomizedSearchCV
+        random_search.fit(X)
+        
+        # Get best parameters and model
+        best_params = random_search.best_params_
+        
+        # Create best model
+        best_model = DBSCAN(
+            eps=best_params['eps'],
+            min_samples=best_params['min_samples']
+        )
+        best_model.fit(X)
+        
+        logger.info(f"Best parameters found: {best_params}")
+        logger.info(f"Best score: {random_search.best_score_:.3f}")
+        
+        return best_params, best_model
+        
+    except Exception as e:
+        logger.error(f"Error in DBSCAN tuning: {str(e)}")
         raise
 
 if __name__ == "__main__":
