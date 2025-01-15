@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      TEST_DATA_PATH: data/raw/test_transactions.csv
     
     steps:
     - uses: actions/checkout@v3
@@ -33,6 +35,7 @@ jobs:
         python -c "
         import pandas as pd
         import numpy as np
+        import os
         
         # Create sample transactions
         n_samples = 100
@@ -48,8 +51,9 @@ jobs:
         
         # Create DataFrame and save to CSV
         df = pd.DataFrame(data)
-        df.to_csv('data/raw/test_transactions.csv', index=False)
-        print('Created test transactions file with', len(df), 'rows')
+        test_file = os.environ['TEST_DATA_PATH']
+        df.to_csv(test_file, index=False)
+        print(f'Created test transactions file at {test_file} with {len(df)} rows')
         "
         ls -l data/raw/
         
@@ -59,9 +63,12 @@ jobs:
         python -c "
         import pandas as pd
         import numpy as np
+        import os
         
         # Read the test data
-        df = pd.read_csv('data/raw/test_transactions.csv')
+        test_file = os.environ['TEST_DATA_PATH']
+        print(f'Reading test data from {test_file}')
+        df = pd.read_csv(test_file)
         
         # Check data shape
         print(f'Data shape: {df.shape}')
@@ -85,6 +92,12 @@ jobs:
         print('\nAddress format check:')
         print('from_address starts with 0x:', all(addr.startswith('0x') for addr in df['from_address']))
         print('to_address starts with 0x:', all(addr.startswith('0x') for addr in df['to_address']))
+        
+        # Verify file accessibility
+        print('\nFile accessibility:')
+        print(f'File exists: {os.path.exists(test_file)}')
+        print(f'File size: {os.path.getsize(test_file)} bytes')
+        print(f'File permissions: {oct(os.stat(test_file).st_mode)[-3:]}')
         "
         
     - name: Show project structure
