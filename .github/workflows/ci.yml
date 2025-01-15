@@ -18,6 +18,14 @@ jobs:
       with:
         python-version: '3.9'
         
+    - name: Create environment file
+      run: |
+        echo "Creating .env file..."
+        echo "ETH_NODE_URL=https://mainnet.infura.io/v3/test-id" > .env
+        echo "ETHERSCAN_API_KEY=test-key" >> .env
+        echo "MLFLOW_TRACKING_URI=sqlite:///mlflow.db" >> .env
+        cat .env
+        
     - name: Show project structure
       run: |
         echo "Project structure:"
