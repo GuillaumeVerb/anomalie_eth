@@ -8,13 +8,29 @@ from unittest.mock import patch, MagicMock
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
+# Import after adding to path
+from src.config import RAW_DATA_DIR, PROCESSED_DATA_DIR
+
 # Set up test environment
 os.environ.setdefault('ETHERSCAN_API_KEY', 'mock_key')
 os.environ.setdefault('ETH_NODE_URL', 'https://mainnet.infura.io/v3/mock-project-id')
 
-# Create necessary directories
-for dir_path in ['data/raw', 'data/processed']:
-    Path(dir_path).mkdir(parents=True, exist_ok=True)
+@pytest.fixture(autouse=True)
+def setup_test_env():
+    """Set up test environment before each test."""
+    # Create necessary directories
+    RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Create empty test file
+    test_file = RAW_DATA_DIR / 'transactions_test.csv'
+    test_file.touch()
+    
+    yield
+    
+    # Cleanup after tests
+    if test_file.exists():
+        test_file.unlink()
 
 @pytest.fixture(autouse=True)
 def mock_external_apis():

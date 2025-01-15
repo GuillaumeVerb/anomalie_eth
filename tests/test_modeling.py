@@ -6,7 +6,7 @@ from src.preprocessing import preprocess_transactions
 from src.config import FEATURE_COLUMNS, RAW_DATA_DIR
 
 @pytest.fixture
-def sample_data():
+def sample_data(setup_test_env):
     """Create a sample DataFrame with required features."""
     df = pd.DataFrame({
         'value': [1.0, 2.0, 3.0, 100.0],  # Last value is an outlier
@@ -20,15 +20,12 @@ def sample_data():
     })
     
     # Save to CSV and preprocess
-    test_file = RAW_DATA_DIR / 'test_transactions.csv'
+    test_file = RAW_DATA_DIR / 'transactions_test.csv'
     df.to_csv(test_file, index=False)
     
-    try:
-        processed_df = preprocess_transactions(test_file)
-        return processed_df
-    finally:
-        if test_file.exists():
-            test_file.unlink()
+    # Process the data
+    processed_df = preprocess_transactions(test_file)
+    return processed_df
 
 @pytest.mark.parametrize("model_type", ["IF", "DBSCAN"])
 def test_anomaly_detection_pipeline(sample_data, model_type):
