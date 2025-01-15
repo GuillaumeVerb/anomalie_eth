@@ -2,7 +2,7 @@ pandas==2.0.0
 numpy==1.23.5
 scikit-learn==1.2.0
 web3==6.11.1
-eth-typing==3.5.1
+eth-typing==4.0.0
 eth-utils==2.3.1
 eth-abi==4.2.1
 streamlit==1.29.0
