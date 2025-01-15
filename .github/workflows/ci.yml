@@ -61,6 +61,15 @@ jobs:
         echo -e "\nChecking eth_typing..."
         python -c "import eth_typing; print(f'eth_typing version: {eth_typing.__version__}')"
         
+    - name: Check test dependencies
+      run: |
+        echo "Checking pytest configuration..."
+        python -c "import pytest; print(f'pytest version: {pytest.__version__}')"
+        echo -e "\nPytest plugins:"
+        pytest --trace-config
+        echo -e "\nTest discovery:"
+        PYTHONPATH=$PYTHONPATH:$(pwd) pytest --collect-only -v tests/
+        
     - name: Show debug information
       run: |
         python --version
