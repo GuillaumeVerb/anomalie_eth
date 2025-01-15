@@ -53,6 +53,40 @@ jobs:
         "
         ls -l data/raw/
         
+    - name: Verify test data
+      run: |
+        echo "Verifying test data format..."
+        python -c "
+        import pandas as pd
+        import numpy as np
+        
+        # Read the test data
+        df = pd.read_csv('data/raw/test_transactions.csv')
+        
+        # Check data shape
+        print(f'Data shape: {df.shape}')
+        
+        # Check column names
+        print('\nColumns:', df.columns.tolist())
+        
+        # Check data types
+        print('\nData types:')
+        print(df.dtypes)
+        
+        # Check value ranges
+        print('\nValue ranges:')
+        for col in ['value', 'gas', 'gas_price']:
+            print(f'{col}: {df[col].min():.2f} to {df[col].max():.2f}')
+        
+        # Verify no missing values
+        print('\nMissing values:', df.isnull().sum().sum())
+        
+        # Check address format
+        print('\nAddress format check:')
+        print('from_address starts with 0x:', all(addr.startswith('0x') for addr in df['from_address']))
+        print('to_address starts with 0x:', all(addr.startswith('0x') for addr in df['to_address']))
+        "
+        
     - name: Show project structure
       run: |
         echo "Project structure:"
