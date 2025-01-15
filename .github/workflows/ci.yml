@@ -37,6 +37,17 @@ jobs:
         pip install -r requirements.txt
         pip install pytest==7.4.3 pytest-cov==4.1.0
         
+    - name: Show environment information
+      run: |
+        echo "Python executable location:"
+        which python
+        echo -e "\nPython version and prefix:"
+        python -c "import sys; print(f'Version: {sys.version}'); print(f'Prefix: {sys.prefix}')"
+        echo -e "\nPython site-packages:"
+        python -c "import site; print('\n'.join(site.getsitepackages()))"
+        echo -e "\nInstalled packages locations:"
+        pip list -v
+        
     - name: Show debug information
       run: |
         python --version
