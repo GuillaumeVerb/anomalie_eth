@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 from src.modeling import anomaly_detection_pipeline
 from src.preprocessing import preprocess_transactions
+from src.etherscan_api import get_address_balance, get_address_transactions
 
 # Configuration de la page
 st.set_page_config(
@@ -58,9 +59,110 @@ def detect_anomalies(_df, model_type):
         st.error(f"Error in anomaly detection: {str(e)}")
         return None
 
+@st.cache_data
+def fetch_address_data(address):
+    """Fetch and cache address data from Etherscan."""
+    try:
+        # Get balance
+        balance = get_address_balance(address)
+        
+        # Get transactions
+        transactions = get_address_transactions(address)
+        df = pd.DataFrame(transactions)
+        
+        # Convert timestamps to datetime
+        df['timestamp'] = pd.to_datetime(df['timeStamp'].astype(int), unit='s')
+        
+        # Convert values to ETH
+        df['value_eth'] = pd.to_numeric(df['value']) / 1e18
+        df['gas_price_gwei'] = pd.to_numeric(df['gasPrice']) / 1e9
+        
+        return balance, df
+    except Exception as e:
+        st.error(f"Error fetching address data: {str(e)}")
+        return None, None
+
 def main():
     st.title("Ethereum Transaction Anomaly Detection")
     
+    # Sidebar navigation
+    page = st.sidebar.selectbox(
+        "Select Page",
+        ["Anomaly Detection", "Etherscan Search"]
+    )
+    
+    if page == "Anomaly Detection":
+        show_anomaly_detection()
+    else:
+        show_etherscan_search()
+
+def show_etherscan_search():
+    st.header("Etherscan Address Analysis")
+    
+    # Address input
+    address = st.text_input(
+        "Enter Ethereum Address",
+        help="Enter a valid Ethereum address to analyze its transactions"
+    )
+    
+    if address:
+        with st.spinner("Fetching address data..."):
+            balance, transactions = fetch_address_data(address)
+            
+            if balance is not None and transactions is not None:
+                # Display address overview
+                st.subheader("Address Overview")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Current Balance", f"{balance:.4f} ETH")
+                col2.metric("Total Transactions", f"{len(transactions):,}")
+                
+                if len(transactions) > 0:
+                    total_value = transactions['value_eth'].sum()
+                    col3.metric("Total Value Transferred", f"{total_value:.4f} ETH")
+                
+                # Transaction history
+                st.subheader("Transaction History")
+                
+                # Add filters
+                col1, col2 = st.columns(2)
+                with col1:
+                    min_value = st.number_input("Min Value (ETH)", 0.0)
+                with col2:
+                    max_value = st.number_input("Max Value (ETH)", value=float(transactions['value_eth'].max()))
+                
+                # Filter transactions
+                mask = (transactions['value_eth'] >= min_value)
+                if max_value > 0:
+                    mask &= (transactions['value_eth'] <= max_value)
+                filtered_transactions = transactions[mask]
+                
+                # Display transactions
+                if len(filtered_transactions) > 0:
+                    # Create time series plot
+                    fig = px.scatter(
+                        filtered_transactions,
+                        x='timestamp',
+                        y='value_eth',
+                        title='Transaction Values Over Time',
+                        labels={'value_eth': 'Value (ETH)', 'timestamp': 'Date'}
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Display transaction table
+                    st.dataframe(
+                        filtered_transactions[[
+                            'timestamp', 'value_eth', 'gas_price_gwei', 'gas',
+                            'from', 'to', 'hash'
+                        ]].style.format({
+                            'value_eth': '{:,.6f}',
+                            'gas_price_gwei': '{:,.2f}',
+                            'gas': '{:,.0f}'
+                        })
+                    )
+                else:
+                    st.info("No transactions found matching the filters.")
+
+def show_anomaly_detection():
     # Load data
     df = load_data()
     if df is None:
