@@ -8,15 +8,18 @@ from src.config import FEATURE_COLUMNS, RAW_DATA_DIR
 @pytest.fixture
 def sample_data(setup_test_env):
     """Create a sample DataFrame with required features."""
+    np.random.seed(42)  # For reproducibility
+    
+    # Create sample data with clear anomalies in each feature
     df = pd.DataFrame({
-        'value': [1.0, 2.0, 3.0, 100.0],  # Last value is an outlier
-        'gas_price': [0.1, 0.2, 0.3, 0.2],
-        'gas': [21000, 21000, 21000, 21000],
+        'value': [1.0, 1.2, 0.8, 100.0],  # Last value is an outlier
+        'gas_price': [20, 22, 21, 200],    # Last value is an outlier
+        'gas': [21000, 21000, 21000, 500000],  # Last value is an outlier
         'block_number': [1000, 1001, 1002, 1003],
         'from_address': ['0x123', '0x456', '0x789', '0x123'],
         'to_address': ['0x789', '0x789', '0xabc', '0xdef'],
-        'input_data': ['', '', '', ''],
-        'block_timestamp': [1704067200, 1704153600, 1704240000, 1704326400]
+        'input_data': ['', '', '', '0x123456'],  # Last one has contract interaction
+        'block_timestamp': [1704067200, 1704153600, 1704240000, 1704326400]  # Daily intervals
     })
     
     # Save to CSV and preprocess
@@ -40,10 +43,10 @@ def test_anomaly_detection_pipeline(sample_data, model_type):
     # Convert to boolean for consistent comparison
     anomalies = results['anomaly_label'] == 1
     
-    # At least one anomaly should be detected (we have an outlier)
+    # At least one anomaly should be detected (we have outliers)
     assert anomalies.sum() > 0
     
-    # The last row should be detected as an anomaly (it's an obvious outlier)
+    # The last row should be detected as an anomaly (it's an obvious outlier in all features)
     assert anomalies.iloc[3]
     
     # Check that we didn't lose any data
