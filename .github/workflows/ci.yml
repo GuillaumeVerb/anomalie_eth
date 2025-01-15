@@ -26,6 +26,33 @@ jobs:
         echo "MLFLOW_TRACKING_URI=sqlite:///mlflow.db" >> .env
         cat .env
         
+    - name: Create test data
+      run: |
+        echo "Creating test transactions file..."
+        mkdir -p data/raw
+        python -c "
+        import pandas as pd
+        import numpy as np
+        
+        # Create sample transactions
+        n_samples = 100
+        data = {
+            'block_number': np.arange(1000, 1000 + n_samples),
+            'block_timestamp': np.arange(1640995200, 1640995200 + n_samples * 15, 15),
+            'from_address': ['0x' + ''.join([str(i) for _ in range(40)]) for i in range(n_samples)],
+            'to_address': ['0x' + ''.join([str(i) for _ in range(40)]) for i in range(n_samples)],
+            'value': np.random.uniform(0, 10, n_samples),
+            'gas': np.random.uniform(21000, 100000, n_samples),
+            'gas_price': np.random.uniform(50, 200, n_samples)
+        }
+        
+        # Create DataFrame and save to CSV
+        df = pd.DataFrame(data)
+        df.to_csv('data/raw/test_transactions.csv', index=False)
+        print('Created test transactions file with', len(df), 'rows')
+        "
+        ls -l data/raw/
+        
     - name: Show project structure
       run: |
         echo "Project structure:"
