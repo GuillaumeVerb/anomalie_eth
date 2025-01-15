@@ -23,7 +23,7 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
         model_type (str): Type of model to use ("isolation_forest" or "dbscan")
         
     Returns:
-        tuple: (predictions, model)
+        pd.DataFrame: Original data with anomaly labels added
     """
     # Extract features
     X = data[FEATURE_COLUMNS].copy()
@@ -45,12 +45,12 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
         mlflow.log_param("n_samples", len(data))
         mlflow.log_param("features", FEATURE_COLUMNS)
         
-        if model_type == "isolation_forest":
+        if model_type.upper() in ["IF", "ISOLATION_FOREST"]:
             # Train Isolation Forest
             model = IsolationForest(**ISOLATION_FOREST_PARAMS)
             mlflow.log_params(ISOLATION_FOREST_PARAMS)
             
-        elif model_type == "dbscan":
+        elif model_type.upper() == "DBSCAN":
             # Train DBSCAN
             model = DBSCAN(**DBSCAN_PARAMS)
             mlflow.log_params(DBSCAN_PARAMS)
@@ -62,7 +62,7 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
         predictions = model.fit_predict(X_scaled)
         
         # Convert predictions to binary (1: normal, 0: anomaly)
-        if model_type == "isolation_forest":
+        if model_type.upper() in ["IF", "ISOLATION_FOREST"]:
             predictions = np.where(predictions == 1, 0, 1)  # IF: 1 is inlier, -1 is outlier
             
         # Calculate silhouette score
@@ -79,8 +79,12 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
         mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
         
         logging.info(f"Detected {n_anomalies} anomalies ({n_anomalies/len(predictions)*100:.1f}%)")
+        
+        # Add predictions to original data
+        result_df = data.copy()
+        result_df['anomaly_label'] = predictions
             
-    return predictions, model
+    return result_df
 
 def tune_isolation_forest(data: pd.DataFrame, param_grid: dict):
     """
