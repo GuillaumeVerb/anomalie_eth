@@ -33,6 +33,14 @@ jobs:
         pip list
         pip check
         python -c "import sys; print('Python path:', sys.path)"
+        python -c "import os; print('Working directory:', os.getcwd())"
+        
+    - name: Show test files
+      run: |
+        echo "Content of test_modeling.py:"
+        cat tests/test_modeling.py
+        echo -e "\nContent of test_preprocessing.py:"
+        cat tests/test_preprocessing.py
         
     - name: Create directories
       run: |
@@ -43,7 +51,7 @@ jobs:
         
     - name: Run tests
       run: |
-        python -m pytest tests/ -v --disable-pytest-warnings --tb=long
+        PYTHONPATH=$PYTHONPATH:$(pwd) python -m pytest tests/ -v --disable-pytest-warnings --tb=long
         
   build-and-push:
     needs: test
