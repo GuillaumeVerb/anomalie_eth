@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 import pytest
 from unittest.mock import patch, MagicMock
+import mlflow
 
 # Add the project root directory to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -16,11 +17,15 @@ os.environ.setdefault('ETHERSCAN_API_KEY', 'mock_key')
 os.environ.setdefault('ETH_NODE_URL', 'https://mainnet.infura.io/v3/mock-project-id')
 
 @pytest.fixture(autouse=True)
-def setup_test_env():
+def setup_test_env(tmp_path):
     """Set up test environment before each test."""
     # Create necessary directories
     RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
     PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Set up MLflow to use a temporary directory
+    mlflow_dir = tmp_path / "mlruns"
+    mlflow.set_tracking_uri(f"file://{mlflow_dir}")
     
     # Create empty test file
     test_file = RAW_DATA_DIR / 'transactions_test.csv'
