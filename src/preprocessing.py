@@ -35,14 +35,14 @@ def preprocess_transactions(input_file=None):
         logger.info(f"Loaded {len(df)} transactions")
         
         # Drop rows with missing values in key columns
-        df = df.dropna(subset=['value', 'gas_price', 'gas_used'])
+        df = df.dropna(subset=['value', 'gas_price', 'gas'])
         logger.info(f"Remaining transactions after dropping nulls: {len(df)}")
         
         # Create derived features
-        df['transaction_fee'] = df['gas_price'] * df['gas_used']
+        df['transaction_fee'] = df['gas_price'] * df['gas']
         
         # Log transform numerical features to handle extreme values
-        for col in ['value', 'gas_price', 'gas_used', 'transaction_fee']:
+        for col in ['value', 'gas_price', 'gas', 'transaction_fee']:
             # Add small constant to handle zeros
             df[f'log_{col}'] = np.log1p(df[col])
         
@@ -58,7 +58,7 @@ def preprocess_transactions(input_file=None):
         df['to_address_freq'] = df['to_address'].map(to_counts)
         
         # Calculate ratios
-        df['value_to_gas_ratio'] = df['value'] / df['gas_used']
+        df['value_to_gas_ratio'] = df['value'] / df['gas']
         df['fee_to_value_ratio'] = df['transaction_fee'] / (df['value'] + 1e-10)  # Add small constant to avoid division by zero
         
         # Save processed data

@@ -52,4 +52,4 @@ DBSCAN_PARAMS = {
 }
 
 # Feature columns for anomaly detection
-FEATURE_COLUMNS = ['value', 'gas_price', 'gas_used'] 
+FEATURE_COLUMNS = ['value', 'gas_price', 'gas'] 
