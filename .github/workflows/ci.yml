@@ -33,6 +33,12 @@ jobs:
         pip list
         pip check
         
+    - name: Create directories
+      run: |
+        mkdir -p data/raw
+        mkdir -p data/processed
+        mkdir -p models
+        
     - name: Run tests
       run: |
         python -m pytest tests/ -v --disable-pytest-warnings
