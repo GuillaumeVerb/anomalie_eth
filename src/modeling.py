@@ -23,7 +23,7 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
         model_type (str): Type of model to use ("isolation_forest" or "dbscan")
         
     Returns:
-        pd.DataFrame: Original data with anomaly labels added
+        pd.DataFrame: Original data with anomaly column added (True for anomalies)
     """
     # Extract features
     X = data[FEATURE_COLUMNS].copy()
@@ -61,9 +61,11 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
         # Fit model and get predictions
         predictions = model.fit_predict(X_scaled)
         
-        # Convert predictions to binary (1: normal, 0: anomaly)
+        # Convert predictions to boolean (True: anomaly, False: normal)
         if model_type.upper() in ["IF", "ISOLATION_FOREST"]:
-            predictions = np.where(predictions == 1, 0, 1)  # IF: 1 is inlier, -1 is outlier
+            predictions = predictions == -1  # IF: 1 is inlier, -1 is outlier
+        else:
+            predictions = predictions == -1  # DBSCAN: -1 is outlier
             
         # Calculate silhouette score
         try:
@@ -74,7 +76,7 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
             logging.warning("Could not calculate silhouette score")
             
         # Log number of anomalies
-        n_anomalies = np.sum(predictions == 1)
+        n_anomalies = np.sum(predictions)
         mlflow.log_metric("n_anomalies", n_anomalies)
         mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
         
@@ -82,7 +84,7 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
         
         # Add predictions to original data
         result_df = data.copy()
-        result_df['anomaly_label'] = predictions
+        result_df['anomaly'] = predictions
             
     return result_df
 
