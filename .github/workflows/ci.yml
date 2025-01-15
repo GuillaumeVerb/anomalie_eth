@@ -70,9 +70,15 @@ jobs:
         mkdir -p models
         ls -R data/
         
-    - name: Run tests
+    - name: Run preprocessing test
       run: |
-        PYTHONPATH=$PYTHONPATH:$(pwd) python -m pytest tests/ -v --disable-pytest-warnings --tb=long
+        echo "Running preprocessing test..."
+        PYTHONPATH=$PYTHONPATH:$(pwd) python -m pytest tests/test_preprocessing.py -v --disable-pytest-warnings --tb=long -s
+        
+    - name: Run modeling test
+      run: |
+        echo "Running modeling test..."
+        PYTHONPATH=$PYTHONPATH:$(pwd) python -m pytest tests/test_modeling.py -v --disable-pytest-warnings --tb=long -s
         
   build-and-push:
     needs: test
