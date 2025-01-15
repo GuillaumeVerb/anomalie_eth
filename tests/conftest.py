@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 from pathlib import Path
 import pytest
 from unittest.mock import patch, MagicMock
@@ -10,7 +11,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
 # Import after adding to path
-from src.config import RAW_DATA_DIR, PROCESSED_DATA_DIR
+from src.config import RAW_DATA_DIR, PROCESSED_DATA_DIR, EXPERIMENT_NAME
 
 # Set up test environment
 os.environ.setdefault('ETHERSCAN_API_KEY', 'mock_key')
@@ -27,6 +28,9 @@ def setup_test_env(tmp_path):
     mlflow_dir = tmp_path / "mlruns"
     mlflow.set_tracking_uri(f"file://{mlflow_dir}")
     
+    # Create test experiment
+    mlflow.create_experiment(EXPERIMENT_NAME)
+    
     # Create empty test file
     test_file = RAW_DATA_DIR / 'transactions_test.csv'
     test_file.touch()
@@ -36,6 +40,13 @@ def setup_test_env(tmp_path):
     # Cleanup after tests
     if test_file.exists():
         test_file.unlink()
+    
+    # Clean up MLflow directory
+    if mlflow_dir.exists():
+        shutil.rmtree(mlflow_dir)
+    
+    # Reset MLflow
+    mlflow.end_run()
 
 @pytest.fixture(autouse=True)
 def mock_external_apis():

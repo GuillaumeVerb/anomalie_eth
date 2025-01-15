@@ -54,6 +54,9 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
     X_scaled = scaler.fit_transform(X)
     
     try:
+        # End any active runs to avoid nested run errors
+        mlflow.end_run()
+        
         # Create or get experiment
         experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
         if experiment is None:
@@ -89,13 +92,14 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
             else:
                 predictions = predictions == -1  # DBSCAN: -1 is outlier
                 
-            # Calculate silhouette score
+            # Calculate silhouette score if we have both classes
             try:
-                silhouette = silhouette_score(X_scaled, predictions)
-                mlflow.log_metric("silhouette_score", silhouette)
-                logging.info(f"Silhouette score: {silhouette:.3f}")
-            except:
-                logging.warning("Could not calculate silhouette score")
+                if len(np.unique(predictions)) > 1:
+                    silhouette = silhouette_score(X_scaled, predictions)
+                    mlflow.log_metric("silhouette_score", silhouette)
+                    logging.info(f"Silhouette score: {silhouette:.3f}")
+            except Exception as e:
+                logging.warning(f"Could not calculate silhouette score: {str(e)}")
                 
             # Log number of anomalies
             n_anomalies = np.sum(predictions)
@@ -114,6 +118,9 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
             
         predictions = model.fit_predict(X_scaled)
         predictions = predictions == -1
+    finally:
+        # Ensure any active run is ended
+        mlflow.end_run()
     
     # Add predictions to original data
     result_df = data.copy()
