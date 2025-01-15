@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import pytest
 from src.modeling import anomaly_detection_pipeline
+from src.config import FEATURE_COLUMNS
 
 @pytest.fixture
 def sample_data():
@@ -10,15 +11,11 @@ def sample_data():
         'value': [1.0, 2.0, 3.0, 100.0],  # Last value is an outlier
         'gas_price': [0.1, 0.2, 0.3, 0.2],
         'gas': [21000, 21000, 21000, 21000],
-        'transaction_fee': [0.1, 0.2, 0.3, 0.2],
-        'log_value': [0.0, 0.69, 1.09, 4.60],
-        'log_gas_price': [-2.3, -1.6, -1.2, -1.6],
-        'log_gas': [9.95, 9.95, 9.95, 9.95],
-        'log_transaction_fee': [-2.3, -1.6, -1.2, -1.6],
-        'from_address_freq': [2, 1, 1, 1],
-        'to_address_freq': [2, 2, 1, 1],
-        'value_to_gas_ratio': [0.05, 0.1, 0.15, 5.0],
-        'fee_to_value_ratio': [0.1, 0.1, 0.1, 0.002]
+        'block_number': [1000, 1001, 1002, 1003],  # Added block_number
+        'from_address': ['0x123', '0x456', '0x789', '0x123'],  # Added addresses
+        'to_address': ['0x789', '0x789', '0xabc', '0xdef'],  # Added addresses
+        'input_data': ['', '', '', ''],  # Added input_data
+        'block_timestamp': [1704067200, 1704153600, 1704240000, 1704326400]  # Added timestamp
     })
 
 @pytest.mark.parametrize("model_type", ["IF", "DBSCAN"])
@@ -43,6 +40,6 @@ def test_anomaly_detection_pipeline(sample_data, model_type):
     # Check that we didn't lose any data
     assert len(results) == len(sample_data)
     
-    # Check that all original columns are preserved
-    for col in sample_data.columns:
-        assert col in results.columns 
+    # Check that all required feature columns exist
+    for col in FEATURE_COLUMNS:
+        assert col in results.columns, f"Required feature column {col} is missing" 
