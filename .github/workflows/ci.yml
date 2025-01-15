@@ -25,6 +25,8 @@ jobs:
         echo -e "\nFile permissions:"
         ls -la src/
         ls -la tests/
+        echo -e "\nContent of src/__init__.py:"
+        cat src/__init__.py || echo "File is empty or doesn't exist"
         
     - name: Show requirements
       run: cat requirements.txt
@@ -43,6 +45,7 @@ jobs:
         python -c "import sys; print('Python path:', sys.path)"
         python -c "import os; print('Working directory:', os.getcwd())"
         python -c "import src; print('src module location:', src.__file__)"
+        python -c "from src import modeling, preprocessing, config; print('All modules imported successfully')"
         
     - name: Show source files
       run: |
