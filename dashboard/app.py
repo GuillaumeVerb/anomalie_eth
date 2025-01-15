@@ -11,7 +11,7 @@ import plotly.express as px
 from pathlib import Path
 import numpy as np
 from src.modeling import anomaly_detection_pipeline
-from src.preprocessing import transform_data
+from src.preprocessing import preprocess_transactions
 
 # Configuration de la page
 st.set_page_config(
@@ -32,16 +32,16 @@ def load_data():
         else:
             # If not found, load raw data and process it
             raw_data_path = max(Path("data/raw").glob("transactions_*.csv"))
-            raw_df = pd.read_csv(raw_data_path)
-            df = transform_data(raw_df)
+            df = preprocess_transactions(raw_data_path)
         
         # Add ETH conversions (1 ETH = 10^18 Wei)
         df['value_eth'] = df['value'] / 1e18
         df['transaction_fee_eth'] = df['transaction_fee'] / 1e18
         df['gas_price_gwei'] = df['gas_price'] / 1e9  # Convert to Gwei for better readability
         
-        # Convert block_timestamp to datetime
-        df['timestamp'] = pd.to_datetime(df['block_timestamp'])
+        # Convert Unix timestamp to datetime and sort by timestamp
+        df['timestamp'] = pd.to_datetime(df['block_timestamp'], unit='s')
+        df = df.sort_values('timestamp')
         
         return df
     except Exception as e:
@@ -67,31 +67,67 @@ def main():
         st.error("Failed to load data. Please check the data files.")
         return
     
-    # Sidebar for date range selection
+    # Get the actual date range from the data
+    data_min_date = df['timestamp'].min()
+    data_max_date = df['timestamp'].max()
+    
+    # Display data range info
+    st.write(f"Data range: {data_min_date.strftime('%Y-%m-%d %H:%M:%S')} to {data_max_date.strftime('%Y-%m-%d %H:%M:%S')}")
+    st.write(f"Number of transactions: {len(df):,}")
+    
+    # Check if data spans multiple days
+    unique_dates = df['timestamp'].dt.date.unique()
+    if len(unique_dates) == 1:
+        st.info(f"📅 Data is only available for {unique_dates[0].strftime('%Y-%m-%d')}. You can select different time ranges within this day.")
+    
+    # Date and time selection
     st.sidebar.header("Time Range Selection")
-    min_date = df['timestamp'].min()
-    max_date = df['timestamp'].max()
     
-    start_date = st.sidebar.date_input(
-        "Start Date",
-        value=min_date,
-        min_value=min_date,
-        max_value=max_date
-    )
+    if len(unique_dates) == 1:
+        st.sidebar.markdown(f"**Date**: {unique_dates[0].strftime('%Y-%m-%d')} *(only available date)*")
+        selected_date = unique_dates[0]
+    else:
+        selected_date = st.sidebar.date_input(
+            "Date",
+            value=data_min_date.date(),
+            min_value=data_min_date.date(),
+            max_value=data_max_date.date()
+        )
     
-    end_date = st.sidebar.date_input(
-        "End Date",
-        value=max_date,
-        min_value=min_date,
-        max_value=max_date
-    )
+    st.sidebar.subheader("Select Time Range")
+    col1, col2 = st.sidebar.columns(2)
     
-    # Filter data based on date range
-    mask = (df['timestamp'].dt.date >= start_date) & (df['timestamp'].dt.date <= end_date)
+    with col1:
+        start_time = st.time_input(
+            "Start Time",
+            value=data_min_date.time()
+        )
+    
+    with col2:
+        end_time = st.time_input(
+            "End Time",
+            value=data_max_date.time()
+        )
+    
+    # Create datetime objects for filtering
+    start_datetime = pd.Timestamp.combine(selected_date, start_time)
+    end_datetime = pd.Timestamp.combine(selected_date, end_time)
+    
+    # Handle case where end time is before start time
+    if end_datetime < start_datetime:
+        st.sidebar.error("⚠️ End time must be after start time")
+        return
+    
+    # Filter data based on time range
+    mask = (df['timestamp'] >= start_datetime) & (df['timestamp'] <= end_datetime)
     filtered_df = df[mask].copy()
     
-    # Show date range info
-    st.sidebar.info(f"Selected {len(filtered_df):,} transactions from {start_date} to {end_date}")
+    # Show time range info with transaction count
+    n_transactions = len(filtered_df)
+    if n_transactions > 0:
+        st.sidebar.success(f"✅ Selected {n_transactions:,} transactions from {start_datetime.strftime('%H:%M')} to {end_datetime.strftime('%H:%M')}")
+    else:
+        st.sidebar.warning("⚠️ No transactions found in the selected time range")
     
     # Sidebar for model selection
     st.sidebar.header("Model Configuration")
@@ -144,7 +180,7 @@ def main():
     # Launch detection button
     if st.button("Launch Detection"):
         if len(filtered_df) == 0:
-            st.warning("No transactions found in the selected date range.")
+            st.warning("No transactions found in the selected time range.")
             return
             
         with st.spinner("Running anomaly detection..."):

@@ -1,191 +1,194 @@
 import pandas as pd
 import numpy as np
+import itertools
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import IsolationForest
 from sklearn.cluster import DBSCAN
 from sklearn.metrics import silhouette_score
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 import mlflow
-from typing import Dict, Any, Tuple
-
-from .config import (
+import logging
+from src.config import (
+    FEATURE_COLUMNS,
     ISOLATION_FOREST_PARAMS,
     DBSCAN_PARAMS,
-    FEATURE_COLUMNS,
-    EXPERIMENT_NAME,
-    logger
+    EXPERIMENT_NAME
 )
 
-def preprocess_features(df: pd.DataFrame) -> Tuple[pd.DataFrame, StandardScaler]:
-    """Preprocess features by scaling them."""
-    scaler = StandardScaler()
-    scaled_features = scaler.fit_transform(df[FEATURE_COLUMNS])
-    return pd.DataFrame(scaled_features, columns=FEATURE_COLUMNS), scaler
-
-def anomaly_detection_pipeline(
-    df: pd.DataFrame,
-    model_type: str = "isolation_forest",
-    params: Dict[str, Any] = None
-) -> pd.DataFrame:
+def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_forest"):
     """
-    Run anomaly detection pipeline with MLflow tracking.
+    Run anomaly detection pipeline on transaction data.
     
     Args:
-        df: Input DataFrame with transaction features
-        model_type: Type of model to use ("isolation_forest" or "dbscan")
-        params: Model parameters to override defaults
-    
+        data (pd.DataFrame): Input transaction data
+        model_type (str): Type of model to use ("isolation_forest" or "dbscan")
+        
     Returns:
-        DataFrame with anomaly labels
+        tuple: (predictions, model)
     """
+    # Extract features
+    X = data[FEATURE_COLUMNS].copy()
+    
+    # Scale features
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    # Create or get experiment
+    experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
+    if experiment is None:
+        experiment_id = mlflow.create_experiment(EXPERIMENT_NAME)
+    else:
+        experiment_id = experiment.experiment_id
+    
     # Start MLflow run
-    with mlflow.start_run(experiment_name=EXPERIMENT_NAME) as run:
-        logger.info(f"Started MLflow run: {run.info.run_id}")
-        mlflow.log_param("model_type", model_type)
+    with mlflow.start_run(experiment_id=experiment_id) as run:
+        # Log dataset info
+        mlflow.log_param("n_samples", len(data))
+        mlflow.log_param("features", FEATURE_COLUMNS)
         
-        # Preprocess features
-        scaled_df, scaler = preprocess_features(df)
-        
-        # Select and configure model
         if model_type == "isolation_forest":
-            model_params = params or ISOLATION_FOREST_PARAMS
-            model = IsolationForest(**model_params)
-            mlflow.log_params(model_params)
+            # Train Isolation Forest
+            model = IsolationForest(**ISOLATION_FOREST_PARAMS)
+            mlflow.log_params(ISOLATION_FOREST_PARAMS)
+            
         elif model_type == "dbscan":
-            model_params = params or DBSCAN_PARAMS
-            model = DBSCAN(**model_params)
-            mlflow.log_params(model_params)
+            # Train DBSCAN
+            model = DBSCAN(**DBSCAN_PARAMS)
+            mlflow.log_params(DBSCAN_PARAMS)
+            
         else:
             raise ValueError(f"Unknown model type: {model_type}")
+            
+        # Fit model and get predictions
+        predictions = model.fit_predict(X_scaled)
         
-        # Fit model and predict
+        # Convert predictions to binary (1: normal, 0: anomaly)
         if model_type == "isolation_forest":
-            labels = model.fit_predict(scaled_df)
-            # Convert to binary labels (1: normal, 0: anomaly)
-            labels = np.where(labels == 1, 0, 1)
-        else:  # DBSCAN
-            labels = model.fit_predict(scaled_df)
-            # Convert to binary labels (-1: anomaly, others: normal)
-            labels = np.where(labels == -1, 1, 0)
-        
-        # Calculate silhouette score for non-anomalous points
+            predictions = np.where(predictions == 1, 0, 1)  # IF: 1 is inlier, -1 is outlier
+            
+        # Calculate silhouette score
         try:
-            if len(np.unique(labels)) > 1:
-                silhouette = silhouette_score(scaled_df, labels)
-                mlflow.log_metric("silhouette_score", silhouette)
-                logger.info(f"Silhouette score: {silhouette:.3f}")
-        except Exception as e:
-            logger.warning(f"Could not calculate silhouette score: {e}")
-        
+            silhouette = silhouette_score(X_scaled, predictions)
+            mlflow.log_metric("silhouette_score", silhouette)
+            logging.info(f"Silhouette score: {silhouette:.3f}")
+        except:
+            logging.warning("Could not calculate silhouette score")
+            
         # Log number of anomalies
-        n_anomalies = sum(labels)
+        n_anomalies = np.sum(predictions == 1)
         mlflow.log_metric("n_anomalies", n_anomalies)
-        mlflow.log_metric("anomaly_ratio", n_anomalies / len(df))
+        mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
         
-        # Add labels to original dataframe
-        df['is_anomaly'] = labels
-        return df
+        logging.info(f"Detected {n_anomalies} anomalies ({n_anomalies/len(predictions)*100:.1f}%)")
+            
+    return predictions, model
 
-def tune_isolation_forest(
-    df: pd.DataFrame,
-    param_grid: Dict[str, Any] = None
-) -> Dict[str, Any]:
+def tune_isolation_forest(data: pd.DataFrame, param_grid: dict):
     """
-    Tune Isolation Forest hyperparameters using GridSearchCV.
+    Tune Isolation Forest hyperparameters using grid search.
     
     Args:
-        df: Input DataFrame
-        param_grid: Dictionary of parameters to search
+        data (pd.DataFrame): Input transaction data
+        param_grid (dict): Parameter grid to search
         
     Returns:
-        Best parameters found
+        dict: Best parameters found
     """
-    if param_grid is None:
-        param_grid = {
-            'n_estimators': [50, 100, 200],
-            'contamination': [0.01, 0.05, 0.1],
-            'max_samples': ['auto', 100, 500]
-        }
+    X = data[FEATURE_COLUMNS].copy()
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
     
-    scaled_df, _ = preprocess_features(df)
+    # Create or get experiment
+    experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
+    if experiment is None:
+        experiment_id = mlflow.create_experiment(EXPERIMENT_NAME)
+    else:
+        experiment_id = experiment.experiment_id
     
-    with mlflow.start_run(experiment_name=EXPERIMENT_NAME) as run:
-        logger.info(f"Started Isolation Forest tuning run: {run.info.run_id}")
-        mlflow.log_params({"tuning_model": "isolation_forest"})
-        
-        # Create base model
-        base_model = IsolationForest(random_state=42)
-        
-        # Initialize GridSearchCV
-        grid_search = GridSearchCV(
-            estimator=base_model,
-            param_grid=param_grid,
-            scoring='neg_mean_squared_error',
-            cv=5,
-            n_jobs=-1
-        )
-        
-        # Fit GridSearchCV
-        grid_search.fit(scaled_df)
-        
-        # Log results
-        mlflow.log_params(grid_search.best_params_)
-        mlflow.log_metric("best_score", grid_search.best_score_)
-        
-        logger.info(f"Best parameters: {grid_search.best_params_}")
-        logger.info(f"Best score: {grid_search.best_score_:.3f}")
-        
-        return grid_search.best_params_
+    best_score = -np.inf
+    best_params = None
+    
+    # Grid search
+    for params in _get_param_combinations(param_grid):
+        with mlflow.start_run(experiment_id=experiment_id) as run:
+            mlflow.log_params(params)
+            
+            model = IsolationForest(**params)
+            predictions = model.fit_predict(X_scaled)
+            predictions = np.where(predictions == 1, 0, 1)
+            
+            try:
+                score = silhouette_score(X_scaled, predictions)
+                mlflow.log_metric("silhouette_score", score)
+                
+                if score > best_score:
+                    best_score = score
+                    best_params = params
+                    
+            except:
+                logging.warning("Could not calculate silhouette score")
+                continue
+                
+            n_anomalies = np.sum(predictions == 1)
+            mlflow.log_metric("n_anomalies", n_anomalies)
+            mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
+            
+    return best_params
 
-def tune_dbscan(
-    df: pd.DataFrame,
-    param_distributions: Dict[str, Any] = None,
-    n_iter: int = 20
-) -> Dict[str, Any]:
+def tune_dbscan(data: pd.DataFrame, param_grid: dict):
     """
-    Tune DBSCAN hyperparameters using RandomizedSearchCV.
+    Tune DBSCAN hyperparameters using grid search.
     
     Args:
-        df: Input DataFrame
-        param_distributions: Dictionary of parameters to sample from
-        n_iter: Number of parameter settings to try
+        data (pd.DataFrame): Input transaction data
+        param_grid (dict): Parameter grid to search
         
     Returns:
-        Best parameters found
+        dict: Best parameters found
     """
-    if param_distributions is None:
-        param_distributions = {
-            'eps': np.linspace(0.1, 2.0, 20),
-            'min_samples': range(2, 11)
-        }
+    X = data[FEATURE_COLUMNS].copy()
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
     
-    scaled_df, _ = preprocess_features(df)
+    # Create or get experiment
+    experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
+    if experiment is None:
+        experiment_id = mlflow.create_experiment(EXPERIMENT_NAME)
+    else:
+        experiment_id = experiment.experiment_id
     
-    with mlflow.start_run(experiment_name=EXPERIMENT_NAME) as run:
-        logger.info(f"Started DBSCAN tuning run: {run.info.run_id}")
-        mlflow.log_params({"tuning_model": "dbscan"})
-        
-        # Create base model
-        base_model = DBSCAN()
-        
-        # Initialize RandomizedSearchCV
-        random_search = RandomizedSearchCV(
-            estimator=base_model,
-            param_distributions=param_distributions,
-            n_iter=n_iter,
-            scoring='neg_mean_squared_error',
-            cv=5,
-            n_jobs=-1
-        )
-        
-        # Fit RandomizedSearchCV
-        random_search.fit(scaled_df)
-        
-        # Log results
-        mlflow.log_params(random_search.best_params_)
-        mlflow.log_metric("best_score", random_search.best_score_)
-        
-        logger.info(f"Best parameters: {random_search.best_params_}")
-        logger.info(f"Best score: {random_search.best_score_:.3f}")
-        
-        return random_search.best_params_
+    best_score = -np.inf
+    best_params = None
+    
+    # Grid search
+    for params in _get_param_combinations(param_grid):
+        with mlflow.start_run(experiment_id=experiment_id) as run:
+            mlflow.log_params(params)
+            
+            model = DBSCAN(**params)
+            predictions = model.fit_predict(X_scaled)
+            predictions = np.where(predictions == -1, 1, 0)  # DBSCAN: -1 is outlier
+            
+            try:
+                score = silhouette_score(X_scaled, predictions)
+                mlflow.log_metric("silhouette_score", score)
+                
+                if score > best_score:
+                    best_score = score
+                    best_params = params
+                    
+            except:
+                logging.warning("Could not calculate silhouette score")
+                continue
+                
+            n_anomalies = np.sum(predictions == 1)
+            mlflow.log_metric("n_anomalies", n_anomalies)
+            mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
+            
+    return best_params
+
+def _get_param_combinations(param_grid):
+    """Helper function to get all parameter combinations from a grid"""
+    keys = param_grid.keys()
+    values = param_grid.values()
+    for instance in itertools.product(*values):
+        yield dict(zip(keys, instance))

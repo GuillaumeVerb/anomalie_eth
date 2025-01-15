@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import mlflow
 from pathlib import Path
 
@@ -22,41 +23,48 @@ def main():
     print("\n1. Running basic anomaly detection...")
     
     # Isolation Forest
-    results_if = anomaly_detection_pipeline(df, model_type="isolation_forest")
-    n_anomalies_if = results_if['is_anomaly'].sum()
+    predictions_if, model_if = anomaly_detection_pipeline(df, model_type="isolation_forest")
+    n_anomalies_if = np.sum(predictions_if == 1)
     print(f"Isolation Forest detected {n_anomalies_if} anomalies")
     
     # DBSCAN
-    results_dbscan = anomaly_detection_pipeline(df, model_type="dbscan")
-    n_anomalies_dbscan = results_dbscan['is_anomaly'].sum()
+    predictions_dbscan, model_dbscan = anomaly_detection_pipeline(df, model_type="dbscan")
+    n_anomalies_dbscan = np.sum(predictions_dbscan == 1)
     print(f"DBSCAN detected {n_anomalies_dbscan} anomalies")
     
     # 2. Tune Isolation Forest
     print("\n2. Tuning Isolation Forest...")
-    best_if_params = tune_isolation_forest(df)
+    param_grid_if = {
+        'n_estimators': [50, 100, 200],
+        'contamination': [0.01, 0.05, 0.1],
+        'max_samples': ['auto', 100, 500]
+    }
+    best_if_params = tune_isolation_forest(df, param_grid_if)
     print(f"Best Isolation Forest parameters: {best_if_params}")
     
     # Run anomaly detection with tuned parameters
-    results_if_tuned = anomaly_detection_pipeline(
+    predictions_if_tuned, model_if_tuned = anomaly_detection_pipeline(
         df,
-        model_type="isolation_forest",
-        params=best_if_params
+        model_type="isolation_forest"
     )
-    n_anomalies_if_tuned = results_if_tuned['is_anomaly'].sum()
+    n_anomalies_if_tuned = np.sum(predictions_if_tuned == 1)
     print(f"Tuned Isolation Forest detected {n_anomalies_if_tuned} anomalies")
     
     # 3. Tune DBSCAN
     print("\n3. Tuning DBSCAN...")
-    best_dbscan_params = tune_dbscan(df)
+    param_grid_dbscan = {
+        'eps': [0.1, 0.5, 1.0, 2.0],
+        'min_samples': [2, 5, 10]
+    }
+    best_dbscan_params = tune_dbscan(df, param_grid_dbscan)
     print(f"Best DBSCAN parameters: {best_dbscan_params}")
     
     # Run anomaly detection with tuned parameters
-    results_dbscan_tuned = anomaly_detection_pipeline(
+    predictions_dbscan_tuned, model_dbscan_tuned = anomaly_detection_pipeline(
         df,
-        model_type="dbscan",
-        params=best_dbscan_params
+        model_type="dbscan"
     )
-    n_anomalies_dbscan_tuned = results_dbscan_tuned['is_anomaly'].sum()
+    n_anomalies_dbscan_tuned = np.sum(predictions_dbscan_tuned == 1)
     print(f"Tuned DBSCAN detected {n_anomalies_dbscan_tuned} anomalies")
     
     print("\nAll results are logged in MLflow")
