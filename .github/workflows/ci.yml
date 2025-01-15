@@ -61,6 +61,23 @@ jobs:
         echo -e "\nChecking eth_typing..."
         python -c "import eth_typing; print(f'eth_typing version: {eth_typing.__version__}')"
         
+    - name: Check MLflow configuration
+      run: |
+        echo "Checking MLflow..."
+        python -c "import mlflow; print(f'MLflow version: {mlflow.__version__}')"
+        echo -e "\nMLflow tracking URI:"
+        python -c "import mlflow; print(f'Tracking URI: {mlflow.get_tracking_uri()}')"
+        echo -e "\nCreating MLflow experiment..."
+        python -c "
+        import mlflow
+        from src.config import MLFLOW_TRACKING_URI
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        experiment = mlflow.get_experiment_by_name('ethereum_anomaly_detection')
+        if experiment is None:
+            mlflow.create_experiment('ethereum_anomaly_detection')
+        print('MLflow experiment configured successfully')
+        "
+        
     - name: Check test dependencies
       run: |
         echo "Checking pytest configuration..."
