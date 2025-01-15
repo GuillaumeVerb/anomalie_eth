@@ -35,14 +35,14 @@ def preprocess_transactions(input_file=None):
         logger.info(f"Loaded {len(df)} transactions")
         
         # Drop rows with missing values in key columns
-        df = df.dropna(subset=['value', 'gas_price', 'gas'])
+        df = df.dropna(subset=['value', 'gas_price', 'gas_used'])
         logger.info(f"Remaining transactions after dropping nulls: {len(df)}")
         
         # Create derived features
-        df['transaction_fee'] = df['gas_price'] * df['gas']
+        df['transaction_fee'] = df['gas_price'] * df['gas_used']
         
         # Log transform numerical features to handle extreme values
-        for col in ['value', 'gas_price', 'gas', 'transaction_fee']:
+        for col in ['value', 'gas_price', 'gas_used', 'transaction_fee']:
             # Add small constant to handle zeros
             df[f'log_{col}'] = np.log1p(df[col])
         
