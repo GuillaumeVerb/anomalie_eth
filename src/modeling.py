@@ -57,15 +57,13 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
         # End any active runs to avoid nested run errors
         mlflow.end_run()
         
-        # Create or get experiment
+        # Get experiment
         experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
         if experiment is None:
-            experiment_id = mlflow.create_experiment(EXPERIMENT_NAME)
-        else:
-            experiment_id = experiment.experiment_id
+            raise ValueError(f"Experiment {EXPERIMENT_NAME} not found")
             
         # Start MLflow run
-        with mlflow.start_run(experiment_id=experiment_id) as run:
+        with mlflow.start_run(experiment_id=experiment.experiment_id) as run:
             # Log dataset info
             mlflow.log_param("n_samples", len(data))
             mlflow.log_param("features", FEATURE_COLUMNS)
