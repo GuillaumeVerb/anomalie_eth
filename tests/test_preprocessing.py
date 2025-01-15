@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np
-from src.preprocessing import transform_data
+from src.preprocessing import preprocess_transactions
 
-def test_transform_data():
+def test_preprocess_transactions():
     # Create a sample DataFrame
     sample_data = {
         'value': [1.0, 2.0, 3.0],
@@ -11,13 +11,16 @@ def test_transform_data():
         'transaction_fee': [0.1, 0.2, 0.3],
         'from_address': ['0x123', '0x456', '0x123'],
         'to_address': ['0x789', '0x789', '0xabc'],
-        'block_timestamp': ['2024-01-01', '2024-01-02', '2024-01-03'],
+        'block_timestamp': [1704067200, 1704153600, 1704240000],  # Unix timestamps
         'input_data': ['', 'data', '']
     }
     df = pd.DataFrame(sample_data)
     
+    # Save sample data to a temporary CSV file
+    df.to_csv('data/raw/test_transactions.csv', index=False)
+    
     # Transform the data
-    transformed_df = transform_data(df)
+    transformed_df = preprocess_transactions('data/raw/test_transactions.csv')
     
     # Check if required columns exist
     assert 'log_value' in transformed_df.columns
