@@ -57,7 +57,7 @@ def preprocess_transactions(input_file=None):
         df['to_address_freq'] = df['to_address'].map(to_counts)
         
         # Calculate ratios
-        df['value_to_gas_ratio'] = df['value'] / df['gas']
+        df['value_to_gas_ratio'] = df['value'] / df['gas_used']
         df['fee_to_value_ratio'] = df['transaction_fee'] / (df['value'] + 1e-10)  # Add small constant to avoid division by zero
         
         # Save processed data
