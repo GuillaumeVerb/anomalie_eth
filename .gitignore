@@ -26,4 +26,11 @@ build/
 *.egg-info/
 
 # Logs
-*.log 
+*.log
+
+# Temporary scripts
+create_notebook.py 
+
+# MLflow
+mlflow.db
+mlruns/ 
