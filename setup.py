@@ -12,7 +12,11 @@ setup(
         "python-dotenv",
         "streamlit",
         "plotly",
-        "mlflow"
+        "mlflow",
+        "requests",
+        "tqdm",
+        "pytest",
+        "pytest-cov"
     ],
     python_requires=">=3.9",
 ) 
