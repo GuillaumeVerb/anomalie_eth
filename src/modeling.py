@@ -14,6 +14,27 @@ from src.config import (
     EXPERIMENT_NAME
 )
 
+def prepare_features(data: pd.DataFrame):
+    """
+    Prepare and scale features for anomaly detection.
+    
+    Args:
+        data (pd.DataFrame): Input transaction data
+        
+    Returns:
+        tuple: (scaled_features, feature_names)
+            - scaled_features: numpy array of scaled features
+            - feature_names: list of feature names used
+    """
+    # Extract features
+    X = data[FEATURE_COLUMNS].copy()
+    
+    # Scale features
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    return X_scaled, list(FEATURE_COLUMNS)
+
 def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_forest"):
     """
     Run anomaly detection pipeline on transaction data.
