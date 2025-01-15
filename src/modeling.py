@@ -105,7 +105,7 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
         
         # Add predictions to original data
         result_df = data.copy()
-        result_df['anomaly'] = predictions
+        result_df['anomaly_label'] = predictions.astype(int)  # Convert boolean to int (0: normal, 1: anomaly)
             
     return result_df
 
