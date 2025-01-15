@@ -18,6 +18,14 @@ jobs:
       with:
         python-version: '3.9'
         
+    - name: Show project structure
+      run: |
+        echo "Project structure:"
+        ls -R
+        echo -e "\nFile permissions:"
+        ls -la src/
+        ls -la tests/
+        
     - name: Show requirements
       run: cat requirements.txt
         
@@ -34,6 +42,7 @@ jobs:
         pip check
         python -c "import sys; print('Python path:', sys.path)"
         python -c "import os; print('Working directory:', os.getcwd())"
+        python -c "import src; print('src module location:', src.__file__)"
         
     - name: Show source files
       run: |
