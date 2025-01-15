@@ -44,8 +44,26 @@ jobs:
         pip check
         python -c "import sys; print('Python path:', sys.path)"
         python -c "import os; print('Working directory:', os.getcwd())"
-        python -c "import src; print('src module location:', src.__file__)"
-        python -c "from src import modeling, preprocessing, config; print('All modules imported successfully')"
+        
+    - name: Test imports
+      run: |
+        echo "Testing imports..."
+        PYTHONPATH=$PYTHONPATH:$(pwd) python -c "
+        import sys
+        print('Python path:', sys.path)
+        print('Importing src...')
+        import src
+        print('src imported successfully')
+        print('Importing src.modeling...')
+        from src import modeling
+        print('modeling imported successfully')
+        print('Importing src.preprocessing...')
+        from src import preprocessing
+        print('preprocessing imported successfully')
+        print('Importing src.config...')
+        from src import config
+        print('config imported successfully')
+        "
         
     - name: Show source files
       run: |
