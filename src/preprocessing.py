@@ -18,7 +18,7 @@ def preprocess_transactions(input_file=None):
         input_file: Path to the input CSV file. If None, uses the most recent file in RAW_DATA_DIR.
     
     Returns:
-        Path to the processed CSV file.
+        pd.DataFrame: Preprocessed transaction data with derived features.
     """
     try:
         # Find most recent file if not specified
@@ -47,8 +47,9 @@ def preprocess_transactions(input_file=None):
             df[f'log_{col}'] = np.log1p(df[col])
         
         # Calculate transaction density (number of transactions per block)
-        tx_counts = df['block_number'].value_counts()
-        df['tx_density'] = df['block_number'].map(tx_counts)
+        if 'block_number' in df.columns:
+            tx_counts = df['block_number'].value_counts()
+            df['tx_density'] = df['block_number'].map(tx_counts)
         
         # Calculate address frequencies
         from_counts = df['from_address'].value_counts()
@@ -61,7 +62,6 @@ def preprocess_transactions(input_file=None):
         df['fee_to_value_ratio'] = df['transaction_fee'] / (df['value'] + 1e-10)  # Add small constant to avoid division by zero
         
         # Save processed data
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = PROCESSED_DATA_DIR / f"transactions_processed.csv"
         df.to_csv(output_file, index=False)
         
@@ -69,7 +69,7 @@ def preprocess_transactions(input_file=None):
         logger.info("Feature summary:")
         logger.info(df[FEATURE_COLUMNS].describe())
         
-        return output_file
+        return df
         
     except Exception as e:
         logger.error(f"Error in preprocessing: {str(e)}")
