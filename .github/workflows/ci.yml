@@ -35,6 +35,15 @@ jobs:
         python -c "import sys; print('Python path:', sys.path)"
         python -c "import os; print('Working directory:', os.getcwd())"
         
+    - name: Show source files
+      run: |
+        echo "Content of src/modeling.py:"
+        cat src/modeling.py
+        echo -e "\nContent of src/preprocessing.py:"
+        cat src/preprocessing.py
+        echo -e "\nContent of src/config.py:"
+        cat src/config.py
+        
     - name: Show test files
       run: |
         echo "Content of test_modeling.py:"
