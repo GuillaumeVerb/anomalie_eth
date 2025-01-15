@@ -5,12 +5,19 @@ from pathlib import Path
 from tqdm import tqdm
 import time
 from datetime import datetime
+import os
+from typing import Optional
 
 from src.config import (
     ETH_NODE_URL,
     RAW_DATA_DIR,
     logger
 )
+from src.etherscan_api import get_address_transactions
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def fetch_transactions(
     start_block='latest',
@@ -19,13 +26,16 @@ def fetch_transactions(
     output_file=None
 ):
     """
-    Fetch Ethereum transactions and save them to a CSV file.
+    Fetch Ethereum transactions and return them as a DataFrame.
     
     Args:
         start_block (str or int): Starting block number or 'latest'
         num_blocks (int): Number of blocks to fetch
         batch_size (int): Number of blocks to process in each batch
-        output_file (str): Path to save the CSV file
+        output_file (str): Optional path to save the CSV file
+        
+    Returns:
+        pd.DataFrame: DataFrame containing the transactions
     """
     # Connect to Ethereum node
     w3 = Web3(Web3.HTTPProvider(ETH_NODE_URL))
@@ -40,12 +50,7 @@ def fetch_transactions(
     end_block = start_block - num_blocks
     current_block = start_block
     
-    # Prepare output file
-    if output_file is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = RAW_DATA_DIR / f"transactions_{timestamp}.csv"
-    
-    transactions = []
+    all_transactions = []
     
     try:
         with tqdm(total=num_blocks, desc="Fetching blocks") as pbar:
@@ -86,7 +91,7 @@ def fetch_transactions(
                             else:
                                 tx_dict['transaction_fee'] = None
                             
-                            transactions.append(tx_dict)
+                            all_transactions.append(tx_dict)
                         
                         pbar.update(1)
                         
@@ -96,20 +101,102 @@ def fetch_transactions(
                 
                 current_block = batch_end
                 
-                # Save batch to CSV
-                if len(transactions) > 0:
-                    df = pd.DataFrame(transactions)
-                    df.to_csv(output_file, index=False, mode='a', header=not output_file.exists())
-                    transactions = []  # Clear the list after saving
-                
                 # Small delay to avoid rate limiting
                 time.sleep(0.1)
         
+        # Convert all transactions to DataFrame
+        df = pd.DataFrame(all_transactions)
+        
+        # Save to CSV if output_file is specified
+        if output_file is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = RAW_DATA_DIR / f"transactions_{timestamp}.csv"
+            
+        df.to_csv(output_file, index=False)
         logger.info(f"Data collection completed. Transactions saved to {output_file}")
-        return output_file
+        
+        return df
         
     except Exception as e:
         logger.error(f"Error in data collection: {str(e)}")
+        raise
+
+def fetch_address_transactions_etherscan(address: str) -> pd.DataFrame:
+    """
+    Fetch transactions for a specific Ethereum address using Etherscan API.
+    
+    Args:
+        address (str): The Ethereum address to fetch transactions for
+        
+    Returns:
+        pd.DataFrame: DataFrame containing the transactions with columns:
+            - timestamp: datetime of the transaction
+            - block_number: block number
+            - hash: transaction hash
+            - from_address: sender address
+            - to_address: recipient address
+            - value: amount in Ether
+            - gas: gas used
+            - gas_price: gas price in Wei
+    """
+    try:
+        # Fetch transactions from Etherscan
+        transactions = get_address_transactions(address)
+        logger.info(f"Retrieved {len(transactions)} transactions for address {address}")
+        
+        if not transactions:
+            logger.warning(f"No transactions found for address {address}")
+            return pd.DataFrame()
+            
+        # Convert to DataFrame
+        df = pd.DataFrame(transactions)
+        
+        # Convert timestamps to datetime
+        df['timestamp'] = pd.to_datetime(df['timeStamp'].astype(int), unit='s')
+        
+        # Convert numeric columns
+        numeric_columns = {
+            'blockNumber': 'block_number',
+            'value': 'value',
+            'gas': 'gas',
+            'gasPrice': 'gas_price',
+        }
+        
+        for old_col, new_col in numeric_columns.items():
+            df[new_col] = pd.to_numeric(df[old_col], errors='coerce')
+        
+        # Convert value from Wei to Ether
+        df['value'] = df['value'] / 10**18
+        
+        # Rename remaining columns
+        df = df.rename(columns={
+            'hash': 'hash',
+            'from': 'from_address',
+            'to': 'to_address',
+        })
+        
+        # Select and order final columns
+        columns = [
+            'timestamp',
+            'block_number',
+            'hash',
+            'from_address',
+            'to_address',
+            'value',
+            'gas',
+            'gas_price'
+        ]
+        df = df[columns]
+        
+        # Save to CSV
+        output_file = RAW_DATA_DIR / f"{address}_transactions.csv"
+        df.to_csv(output_file, index=False)
+        logger.info(f"Saved transactions to {output_file}")
+        
+        return df
+        
+    except Exception as e:
+        logger.error(f"Error fetching transactions for address {address}: {str(e)}")
         raise
 
 if __name__ == "__main__":
