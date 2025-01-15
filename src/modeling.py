@@ -120,7 +120,7 @@ def tune_isolation_forest(data: pd.DataFrame, param_grid: dict):
             
             model = IsolationForest(**params)
             predictions = model.fit_predict(X_scaled)
-            predictions = np.where(predictions == 1, 0, 1)
+            predictions = predictions == -1  # Convert to boolean (True: anomaly, False: normal)
             
             try:
                 score = silhouette_score(X_scaled, predictions)
@@ -134,7 +134,7 @@ def tune_isolation_forest(data: pd.DataFrame, param_grid: dict):
                 logging.warning("Could not calculate silhouette score")
                 continue
                 
-            n_anomalies = np.sum(predictions == 1)
+            n_anomalies = np.sum(predictions)
             mlflow.log_metric("n_anomalies", n_anomalies)
             mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
             
@@ -172,7 +172,7 @@ def tune_dbscan(data: pd.DataFrame, param_grid: dict):
             
             model = DBSCAN(**params)
             predictions = model.fit_predict(X_scaled)
-            predictions = np.where(predictions == -1, 1, 0)  # DBSCAN: -1 is outlier
+            predictions = predictions == -1  # Convert to boolean (True: anomaly, False: normal)
             
             try:
                 score = silhouette_score(X_scaled, predictions)
@@ -186,7 +186,7 @@ def tune_dbscan(data: pd.DataFrame, param_grid: dict):
                 logging.warning("Could not calculate silhouette score")
                 continue
                 
-            n_anomalies = np.sum(predictions == 1)
+            n_anomalies = np.sum(predictions)
             mlflow.log_metric("n_anomalies", n_anomalies)
             mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
             
