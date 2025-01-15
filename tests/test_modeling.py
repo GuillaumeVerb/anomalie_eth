@@ -2,21 +2,33 @@ import pandas as pd
 import numpy as np
 import pytest
 from src.modeling import anomaly_detection_pipeline
-from src.config import FEATURE_COLUMNS
+from src.preprocessing import preprocess_transactions
+from src.config import FEATURE_COLUMNS, RAW_DATA_DIR
 
 @pytest.fixture
 def sample_data():
     """Create a sample DataFrame with required features."""
-    return pd.DataFrame({
+    df = pd.DataFrame({
         'value': [1.0, 2.0, 3.0, 100.0],  # Last value is an outlier
         'gas_price': [0.1, 0.2, 0.3, 0.2],
         'gas': [21000, 21000, 21000, 21000],
-        'block_number': [1000, 1001, 1002, 1003],  # Added block_number
-        'from_address': ['0x123', '0x456', '0x789', '0x123'],  # Added addresses
-        'to_address': ['0x789', '0x789', '0xabc', '0xdef'],  # Added addresses
-        'input_data': ['', '', '', ''],  # Added input_data
-        'block_timestamp': [1704067200, 1704153600, 1704240000, 1704326400]  # Added timestamp
+        'block_number': [1000, 1001, 1002, 1003],
+        'from_address': ['0x123', '0x456', '0x789', '0x123'],
+        'to_address': ['0x789', '0x789', '0xabc', '0xdef'],
+        'input_data': ['', '', '', ''],
+        'block_timestamp': [1704067200, 1704153600, 1704240000, 1704326400]
     })
+    
+    # Save to CSV and preprocess
+    test_file = RAW_DATA_DIR / 'test_transactions.csv'
+    df.to_csv(test_file, index=False)
+    
+    try:
+        processed_df = preprocess_transactions(test_file)
+        return processed_df
+    finally:
+        if test_file.exists():
+            test_file.unlink()
 
 @pytest.mark.parametrize("model_type", ["IF", "DBSCAN"])
 def test_anomaly_detection_pipeline(sample_data, model_type):
