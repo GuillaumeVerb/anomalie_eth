@@ -32,16 +32,18 @@ jobs:
         python --version
         pip list
         pip check
+        python -c "import sys; print('Python path:', sys.path)"
         
     - name: Create directories
       run: |
         mkdir -p data/raw
         mkdir -p data/processed
         mkdir -p models
+        ls -R data/
         
     - name: Run tests
       run: |
-        python -m pytest tests/ -v --disable-pytest-warnings
+        python -m pytest tests/ -v --disable-pytest-warnings --tb=long
         
   build-and-push:
     needs: test
