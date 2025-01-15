@@ -29,14 +29,16 @@ def test_anomaly_detection_pipeline(sample_data, model_type):
     
     # Basic checks
     assert isinstance(results, pd.DataFrame)
-    assert 'anomaly' in results.columns
-    assert results['anomaly'].dtype == bool
+    assert 'anomaly_label' in results.columns
+    
+    # Convert to boolean for consistent comparison
+    anomalies = results['anomaly_label'] == 1
     
     # At least one anomaly should be detected (we have an outlier)
-    assert results['anomaly'].sum() > 0
+    assert anomalies.sum() > 0
     
     # The last row should be detected as an anomaly (it's an obvious outlier)
-    assert results['anomaly'].iloc[3]
+    assert anomalies.iloc[3]
     
     # Check that we didn't lose any data
     assert len(results) == len(sample_data)

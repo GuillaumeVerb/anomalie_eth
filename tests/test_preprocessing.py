@@ -16,7 +16,8 @@ def sample_transactions():
         'from_address': ['0x123', '0x456', '0x123'],
         'to_address': ['0x789', '0x789', '0xabc'],
         'block_timestamp': [1704067200, 1704153600, 1704240000],
-        'input_data': ['', 'data', '']
+        'input_data': ['', 'data', ''],
+        'block_number': [1000, 1001, 1002]
     })
 
 def test_preprocess_transactions(sample_transactions):
@@ -44,7 +45,8 @@ def test_preprocess_transactions(sample_transactions):
             'from_address_freq',
             'to_address_freq',
             'value_to_gas_ratio',
-            'fee_to_value_ratio'
+            'fee_to_value_ratio',
+            'tx_density'
         ]
         
         for col in expected_columns:
@@ -65,6 +67,9 @@ def test_preprocess_transactions(sample_transactions):
             transformed_df['log_value'],
             np.log1p(sample_transactions['value'])
         )
+        
+        # Check transaction density
+        assert transformed_df['tx_density'].iloc[0] == 1  # One transaction per block
         
     finally:
         # Clean up
