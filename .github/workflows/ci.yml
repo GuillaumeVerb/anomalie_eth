@@ -48,6 +48,19 @@ jobs:
         echo -e "\nInstalled packages locations:"
         pip list -v
         
+    - name: Check critical dependencies
+      run: |
+        echo "Checking pandas..."
+        python -c "import pandas; print(f'pandas version: {pandas.__version__}')"
+        echo -e "\nChecking numpy..."
+        python -c "import numpy; print(f'numpy version: {numpy.__version__}')"
+        echo -e "\nChecking scikit-learn..."
+        python -c "import sklearn; print(f'scikit-learn version: {sklearn.__version__}')"
+        echo -e "\nChecking web3..."
+        python -c "import web3; print(f'web3 version: {web3.__version__}')"
+        echo -e "\nChecking eth_typing..."
+        python -c "import eth_typing; print(f'eth_typing version: {eth_typing.__version__}')"
+        
     - name: Show debug information
       run: |
         python --version
