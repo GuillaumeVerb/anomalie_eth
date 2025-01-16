@@ -30,8 +30,13 @@ def test_data_dir():
 def mlflow_tracking_uri(tmp_path_factory):
     """Create a session-wide MLflow tracking directory."""
     logging.info("Setting up MLflow tracking URI")
-    # Use memory SQLite database for testing
-    uri = "sqlite:///:memory:"
+    
+    # Create a temporary directory for MLflow files
+    mlflow_dir = tmp_path_factory.mktemp("mlruns")
+    db_path = mlflow_dir / "mlflow.db"
+    uri = f"sqlite:///{db_path}"
+    
+    logging.info(f"Using SQLite database at: {db_path}")
     mlflow.set_tracking_uri(uri)
     logging.info(f"Set MLflow tracking URI to: {uri}")
     
@@ -78,6 +83,11 @@ def mlflow_tracking_uri(tmp_path_factory):
                 mlflow.delete_experiment(exp.experiment_id)
             except Exception as e:
                 logging.warning(f"Error cleaning up experiment {exp.experiment_id}: {str(e)}")
+                
+        # Clean up MLflow directory
+        if mlflow_dir.exists():
+            logging.info(f"Removing MLflow directory: {mlflow_dir}")
+            shutil.rmtree(mlflow_dir)
     except Exception as e:
         logging.error(f"Error during MLflow cleanup: {str(e)}")
 
@@ -117,26 +127,21 @@ def setup_mlflow(mlflow_tracking_uri):
     except Exception as e:
         logging.warning(f"Error handling existing experiment: {str(e)}")
     
-    # Create new experiment
+    # Create new experiment with unique name
+    unique_name = f"{EXPERIMENT_NAME}_{time.time()}"
     try:
-        # Check if experiment exists again (in case deletion failed)
-        existing_exp = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
-        if existing_exp:
-            experiment_id = existing_exp.experiment_id
-            logging.info(f"Using existing experiment: {experiment_id}")
-        else:
-            experiment_id = mlflow.create_experiment(
-                EXPERIMENT_NAME,
-                tags={
-                    "test": "true",
-                    "created_by": "pytest",
-                    "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "test_run": str(time.time())
-                }
-            )
-            logging.info(f"Created new test experiment with ID: {experiment_id}")
+        experiment_id = mlflow.create_experiment(
+            unique_name,
+            tags={
+                "test": "true",
+                "created_by": "pytest",
+                "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "test_run": str(time.time())
+            }
+        )
+        logging.info(f"Created new test experiment with ID: {experiment_id}")
     except Exception as e:
-        logging.error(f"Failed to create/get experiment: {str(e)}")
+        logging.error(f"Failed to create experiment: {str(e)}")
         raise
     
     yield experiment_id

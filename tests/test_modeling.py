@@ -63,9 +63,9 @@ def test_anomaly_detection_pipeline(sample_data, model_type, setup_mlflow):
         logger.debug(f"Columns: {sample_data.columns.tolist()}")
         logger.debug(f"Feature columns: {FEATURE_COLUMNS}")
         
-        # Run anomaly detection
+        # Run anomaly detection with specific experiment ID
         logger.info("Running anomaly detection pipeline")
-        results = anomaly_detection_pipeline(sample_data, model_type)
+        results = anomaly_detection_pipeline(sample_data, model_type, experiment_id=experiment.experiment_id)
         logger.info("Anomaly detection completed")
         
         # Log results summary

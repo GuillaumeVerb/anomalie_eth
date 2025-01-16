@@ -13,6 +13,7 @@ from src.config import (
     DBSCAN_PARAMS,
     EXPERIMENT_NAME
 )
+from typing import Optional
 
 def prepare_features(data: pd.DataFrame):
     """
@@ -35,13 +36,14 @@ def prepare_features(data: pd.DataFrame):
     
     return X_scaled, list(FEATURE_COLUMNS)
 
-def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_forest"):
+def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_forest", experiment_id: Optional[str] = None):
     """
     Run anomaly detection pipeline on transaction data.
     
     Args:
         data (pd.DataFrame): Input transaction data
         model_type (str): Type of model to use ("isolation_forest" or "dbscan")
+        experiment_id (str, optional): MLflow experiment ID to use. If None, will use default experiment.
         
     Returns:
         pd.DataFrame: Original data with anomaly column added (True for anomalies)
@@ -65,10 +67,17 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
             mlflow.end_run()
         
         # Get experiment
-        experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
-        if experiment is None:
-            logging.error(f"Experiment {EXPERIMENT_NAME} not found")
-            raise ValueError(f"Experiment {EXPERIMENT_NAME} not found")
+        if experiment_id:
+            experiment = mlflow.get_experiment(experiment_id)
+            if experiment is None:
+                logging.error(f"Experiment with ID {experiment_id} not found")
+                raise ValueError(f"Experiment with ID {experiment_id} not found")
+        else:
+            experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
+            if experiment is None:
+                logging.info(f"Creating default experiment: {EXPERIMENT_NAME}")
+                experiment_id = mlflow.create_experiment(EXPERIMENT_NAME)
+                experiment = mlflow.get_experiment(experiment_id)
             
         # Start MLflow run
         with mlflow.start_run(experiment_id=experiment.experiment_id, run_name="prediction", tags={
