@@ -29,8 +29,8 @@ def test_data_dir():
 @pytest.fixture(scope="session")
 def mlflow_tracking_uri(tmp_path_factory):
     """Create a session-wide MLflow tracking directory."""
-    mlflow_dir = tmp_path_factory.mktemp("mlruns")
-    uri = f"sqlite:///{mlflow_dir}/mlflow.db"  # Use SQLite backend for better isolation
+    # Use memory SQLite database for testing
+    uri = "sqlite:///:memory:"
     mlflow.set_tracking_uri(uri)
     
     # Make sure no runs are active at the start
@@ -70,12 +70,8 @@ def mlflow_tracking_uri(tmp_path_factory):
                 mlflow.delete_experiment(exp.experiment_id)
             except:
                 pass
-                
-        # Clean up directory
-        if mlflow_dir.exists():
-            shutil.rmtree(mlflow_dir)
     except Exception as e:
-        logging.warning(f"Error cleaning up MLflow directory: {str(e)}")
+        logging.warning(f"Error cleaning up MLflow: {str(e)}")
 
 @pytest.fixture(autouse=True)
 def setup_mlflow(mlflow_tracking_uri):
@@ -103,7 +99,6 @@ def setup_mlflow(mlflow_tracking_uri):
                     pass
             # Delete the experiment
             mlflow.delete_experiment(existing_exp.experiment_id)
-            time.sleep(1)  # Wait for deletion to complete
     except:
         pass
     

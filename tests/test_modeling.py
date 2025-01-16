@@ -5,6 +5,7 @@ from src.modeling import anomaly_detection_pipeline
 from src.preprocessing import preprocess_transactions
 from src.config import FEATURE_COLUMNS, RAW_DATA_DIR
 import mlflow
+import logging
 
 @pytest.fixture
 def sample_data(setup_test_env):
@@ -34,17 +35,22 @@ def sample_data(setup_test_env):
 @pytest.mark.parametrize("model_type", ["IF", "DBSCAN"])
 def test_anomaly_detection_pipeline(sample_data, model_type, setup_mlflow):
     """Test anomaly detection with different models."""
+    logging.info(f"Starting test for model type: {model_type}")
+    
     # Make sure no runs are active
     try:
         active_run = mlflow.active_run()
         if active_run:
+            logging.info(f"Ending active run before test: {active_run.info.run_id}")
             mlflow.end_run()
-    except:
-        pass
+    except Exception as e:
+        logging.warning(f"Error checking active run before test: {str(e)}")
     
     try:
         # Run anomaly detection
+        logging.info("Running anomaly detection pipeline")
         results = anomaly_detection_pipeline(sample_data, model_type)
+        logging.info("Anomaly detection completed")
         
         # Basic checks
         assert isinstance(results, pd.DataFrame)
@@ -52,9 +58,11 @@ def test_anomaly_detection_pipeline(sample_data, model_type, setup_mlflow):
         
         # Convert to boolean for consistent comparison
         anomalies = results['anomaly_label'] == 1
+        n_anomalies = anomalies.sum()
+        logging.info(f"Detected {n_anomalies} anomalies")
         
         # At least one anomaly should be detected (we have outliers)
-        assert anomalies.sum() > 0
+        assert n_anomalies > 0
         
         # The last row should be detected as an anomaly (it's an obvious outlier in all features)
         assert anomalies.iloc[3]
@@ -65,11 +73,18 @@ def test_anomaly_detection_pipeline(sample_data, model_type, setup_mlflow):
         # Check that all required feature columns exist
         for col in FEATURE_COLUMNS:
             assert col in results.columns, f"Required feature column {col} is missing"
+            
+        logging.info("All test assertions passed")
+    except Exception as e:
+        logging.error(f"Test failed: {str(e)}")
+        raise
     finally:
         # Make sure no runs are left active
         try:
             active_run = mlflow.active_run()
             if active_run:
+                logging.info(f"Ending active run after test: {active_run.info.run_id}")
                 mlflow.end_run()
-        except:
-            pass 
+        except Exception as e:
+            logging.warning(f"Error ending active run after test: {str(e)}")
+        logging.info("Test cleanup completed") 
