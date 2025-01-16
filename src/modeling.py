@@ -53,6 +53,9 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
+    # Initialize predictions as None
+    predictions = None
+    
     try:
         # End any active runs to avoid nested run errors
         mlflow.end_run()
@@ -60,6 +63,7 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
         # Get experiment
         experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
         if experiment is None:
+            logging.error(f"Experiment {EXPERIMENT_NAME} not found")
             raise ValueError(f"Experiment {EXPERIMENT_NAME} not found")
             
         # Start MLflow run
@@ -108,17 +112,21 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
             
     except Exception as e:
         logging.warning(f"MLflow tracking failed: {str(e)}")
-        # Continue without MLflow tracking
-        if model_type.upper() in ["IF", "ISOLATION_FOREST"]:
-            model = IsolationForest(**ISOLATION_FOREST_PARAMS)
-        else:
-            model = DBSCAN(**DBSCAN_PARAMS)
-            
-        predictions = model.fit_predict(X_scaled)
-        predictions = predictions == -1
+        # Continue without MLflow tracking if predictions haven't been made yet
+        if predictions is None:
+            if model_type.upper() in ["IF", "ISOLATION_FOREST"]:
+                model = IsolationForest(**ISOLATION_FOREST_PARAMS)
+            else:
+                model = DBSCAN(**DBSCAN_PARAMS)
+                
+            predictions = model.fit_predict(X_scaled)
+            predictions = predictions == -1
     finally:
         # Ensure any active run is ended
-        mlflow.end_run()
+        try:
+            mlflow.end_run()
+        except Exception as e:
+            logging.warning(f"Error ending MLflow run: {str(e)}")
     
     # Add predictions to original data
     result_df = data.copy()

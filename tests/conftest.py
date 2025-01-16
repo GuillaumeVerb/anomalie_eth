@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 import mlflow
 import tempfile
+import logging
 
 # Add the project root directory to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,7 +26,43 @@ def test_data_dir():
         yield Path(tmp_dir)
 
 @pytest.fixture(autouse=True)
-def setup_test_env(test_data_dir, tmp_path):
+def setup_mlflow(tmp_path):
+    """Set up MLflow tracking for tests."""
+    # Set up MLflow to use a temporary directory
+    mlflow_dir = tmp_path / "mlruns"
+    mlflow.set_tracking_uri(f"file://{mlflow_dir}")
+    
+    # End any active runs
+    mlflow.end_run()
+    
+    # Delete existing experiment if it exists
+    try:
+        existing_exp = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
+        if existing_exp:
+            mlflow.delete_experiment(existing_exp.experiment_id)
+    except Exception as e:
+        logging.warning(f"Error cleaning up existing experiment: {str(e)}")
+    
+    # Create new experiment
+    try:
+        experiment_id = mlflow.create_experiment(EXPERIMENT_NAME)
+        logging.info(f"Created test experiment with ID: {experiment_id}")
+    except Exception as e:
+        logging.error(f"Failed to create experiment: {str(e)}")
+        raise
+    
+    yield
+    
+    # Cleanup
+    try:
+        mlflow.end_run()
+        if mlflow_dir.exists():
+            shutil.rmtree(mlflow_dir)
+    except Exception as e:
+        logging.warning(f"Error during MLflow cleanup: {str(e)}")
+
+@pytest.fixture(autouse=True)
+def setup_test_env(test_data_dir, setup_mlflow):
     """Set up test environment before each test."""
     # Create necessary directories in temp location
     raw_dir = test_data_dir / "raw"
@@ -37,17 +74,6 @@ def setup_test_env(test_data_dir, tmp_path):
     with patch('src.config.RAW_DATA_DIR', raw_dir), \
          patch('src.config.PROCESSED_DATA_DIR', processed_dir):
         
-        # Set up MLflow to use a temporary directory
-        mlflow_dir = tmp_path / "mlruns"
-        mlflow.set_tracking_uri(f"file://{mlflow_dir}")
-        
-        # Create test experiment
-        try:
-            mlflow.delete_experiment(mlflow.get_experiment_by_name(EXPERIMENT_NAME).experiment_id)
-        except:
-            pass
-        mlflow.create_experiment(EXPERIMENT_NAME)
-        
         # Create empty test file
         test_file = raw_dir / 'transactions_test.csv'
         test_file.touch()
@@ -57,11 +83,6 @@ def setup_test_env(test_data_dir, tmp_path):
         # Cleanup after tests
         if test_file.exists():
             test_file.unlink()
-        
-        # Clean up MLflow
-        mlflow.end_run()
-        if mlflow_dir.exists():
-            shutil.rmtree(mlflow_dir)
 
 @pytest.fixture(autouse=True)
 def mock_external_apis():
