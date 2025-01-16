@@ -17,6 +17,7 @@ def sample_data(setup_test_env):
         'value': [1.0, 1.2, 0.8, 100.0],  # Last value is an outlier
         'gas_price': [20, 22, 21, 200],    # Last value is an outlier
         'gas': [21000, 21000, 21000, 500000],  # Last value is an outlier
+        'transaction_fee': [420000, 462000, 441000, 100000000],  # gas_price * gas
         'block_number': [1000, 1001, 1002, 1003],
         'from_address': ['0x123', '0x456', '0x789', '0x123'],
         'to_address': ['0x789', '0x789', '0xabc', '0xdef'],
