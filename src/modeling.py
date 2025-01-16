@@ -74,53 +74,64 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
         with mlflow.start_run(experiment_id=experiment.experiment_id, run_name="prediction", tags={
             "run_type": "prediction",
             "model_type": model_type,
-            "parent_run_id": run_id if run_id else "none"
+            "parent_run_id": run_id if run_id else "none",
+            "status": "running"
         }) as run:
-            # Log dataset info
-            mlflow.log_param("n_samples", len(data))
-            mlflow.log_param("features", FEATURE_COLUMNS)
-            mlflow.log_param("model_type", model_type)
-            
-            if model_type.upper() in ["IF", "ISOLATION_FOREST"]:
-                # Train Isolation Forest
-                model = IsolationForest(**ISOLATION_FOREST_PARAMS)
-                mlflow.log_params(ISOLATION_FOREST_PARAMS)
-                
-            elif model_type.upper() == "DBSCAN":
-                # Train DBSCAN
-                model = DBSCAN(**DBSCAN_PARAMS)
-                mlflow.log_params(DBSCAN_PARAMS)
-                
-            else:
-                raise ValueError(f"Unknown model type: {model_type}")
-                
-            # Fit model and get predictions
-            predictions = model.fit_predict(X_scaled)
-            
-            # Convert predictions to boolean (True: anomaly, False: normal)
-            if model_type.upper() in ["IF", "ISOLATION_FOREST"]:
-                predictions = predictions == -1  # IF: 1 is inlier, -1 is outlier
-            else:
-                predictions = predictions == -1  # DBSCAN: -1 is outlier
-                
-            # Calculate silhouette score if we have both classes
             try:
-                unique_labels = np.unique(predictions)
-                mlflow.log_param("unique_labels", list(unique_labels))
-                if len(unique_labels) > 1:
-                    silhouette = silhouette_score(X_scaled, predictions)
-                    mlflow.log_metric("silhouette_score", silhouette)
-                    logging.info(f"Silhouette score: {silhouette:.3f}")
-            except Exception as e:
-                logging.warning(f"Could not calculate silhouette score: {str(e)}")
-                mlflow.set_tag("silhouette_error", str(e))
+                # Log dataset info
+                mlflow.log_param("n_samples", len(data))
+                mlflow.log_param("features", FEATURE_COLUMNS)
+                mlflow.log_param("model_type", model_type)
                 
-            # Log number of anomalies
-            n_anomalies = np.sum(predictions)
-            mlflow.log_metric("n_anomalies", n_anomalies)
-            mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
-            
-            logging.info(f"Detected {n_anomalies} anomalies ({n_anomalies/len(predictions)*100:.1f}%)")
+                if model_type.upper() in ["IF", "ISOLATION_FOREST"]:
+                    # Train Isolation Forest
+                    model = IsolationForest(**ISOLATION_FOREST_PARAMS)
+                    mlflow.log_params(ISOLATION_FOREST_PARAMS)
+                    
+                elif model_type.upper() == "DBSCAN":
+                    # Train DBSCAN
+                    model = DBSCAN(**DBSCAN_PARAMS)
+                    mlflow.log_params(DBSCAN_PARAMS)
+                    
+                else:
+                    raise ValueError(f"Unknown model type: {model_type}")
+                    
+                # Fit model and get predictions
+                predictions = model.fit_predict(X_scaled)
+                
+                # Convert predictions to boolean (True: anomaly, False: normal)
+                if model_type.upper() in ["IF", "ISOLATION_FOREST"]:
+                    predictions = predictions == -1  # IF: 1 is inlier, -1 is outlier
+                else:
+                    predictions = predictions == -1  # DBSCAN: -1 is outlier
+                    
+                # Calculate silhouette score if we have both classes
+                try:
+                    unique_labels = np.unique(predictions)
+                    mlflow.log_param("unique_labels", list(unique_labels))
+                    if len(unique_labels) > 1:
+                        silhouette = silhouette_score(X_scaled, predictions)
+                        mlflow.log_metric("silhouette_score", silhouette)
+                        logging.info(f"Silhouette score: {silhouette:.3f}")
+                except Exception as e:
+                    logging.warning(f"Could not calculate silhouette score: {str(e)}")
+                    mlflow.set_tag("silhouette_error", str(e))
+                    
+                # Log number of anomalies
+                n_anomalies = np.sum(predictions)
+                mlflow.log_metric("n_anomalies", n_anomalies)
+                mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
+                
+                logging.info(f"Detected {n_anomalies} anomalies ({n_anomalies/len(predictions)*100:.1f}%)")
+                
+                # Mark run as successful
+                mlflow.set_tag("status", "completed")
+                
+            except Exception as e:
+                # Mark run as failed and log error
+                mlflow.set_tag("status", "failed")
+                mlflow.set_tag("error", str(e))
+                raise
             
     except Exception as e:
         logging.warning(f"MLflow tracking failed: {str(e)}")
