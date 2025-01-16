@@ -36,22 +36,41 @@ def sample_data(setup_test_env):
 @pytest.mark.parametrize("model_type", ["IF", "DBSCAN"])
 def test_anomaly_detection_pipeline(sample_data, model_type, setup_mlflow):
     """Test anomaly detection with different models."""
-    logging.info(f"Starting test for model type: {model_type}")
+    logger = logging.getLogger(__name__)
+    logger.info("=" * 80)
+    logger.info(f"Starting test for model type: {model_type}")
+    logger.info("-" * 80)
+    
+    # Log MLflow configuration
+    logger.debug(f"MLflow tracking URI: {mlflow.get_tracking_uri()}")
+    logger.debug(f"MLflow experiment name: {EXPERIMENT_NAME}")
     
     # Make sure no runs are active
     try:
         active_run = mlflow.active_run()
         if active_run:
-            logging.info(f"Ending active run before test: {active_run.info.run_id}")
+            logger.warning(f"Found active run at test start: {active_run.info.run_id}")
             mlflow.end_run()
+            logger.info("Ended active run")
     except Exception as e:
-        logging.warning(f"Error checking active run before test: {str(e)}")
+        logger.error(f"Error checking active run before test: {str(e)}", exc_info=True)
     
     try:
+        # Log input data summary
+        logger.debug("Input data summary:")
+        logger.debug(f"Shape: {sample_data.shape}")
+        logger.debug(f"Columns: {sample_data.columns.tolist()}")
+        logger.debug(f"Feature columns: {FEATURE_COLUMNS}")
+        
         # Run anomaly detection
-        logging.info("Running anomaly detection pipeline")
+        logger.info("Running anomaly detection pipeline")
         results = anomaly_detection_pipeline(sample_data, model_type)
-        logging.info("Anomaly detection completed")
+        logger.info("Anomaly detection completed")
+        
+        # Log results summary
+        logger.debug("Results summary:")
+        logger.debug(f"Shape: {results.shape}")
+        logger.debug(f"Columns: {results.columns.tolist()}")
         
         # Basic checks
         assert isinstance(results, pd.DataFrame)
@@ -60,7 +79,11 @@ def test_anomaly_detection_pipeline(sample_data, model_type, setup_mlflow):
         # Convert to boolean for consistent comparison
         anomalies = results['anomaly_label'] == 1
         n_anomalies = anomalies.sum()
-        logging.info(f"Detected {n_anomalies} anomalies")
+        logger.info(f"Detected {n_anomalies} anomalies ({n_anomalies/len(results)*100:.1f}%)")
+        
+        # Log anomaly details
+        anomaly_indices = anomalies[anomalies].index.tolist()
+        logger.debug(f"Anomaly indices: {anomaly_indices}")
         
         # At least one anomaly should be detected (we have outliers)
         assert n_anomalies > 0
@@ -75,17 +98,20 @@ def test_anomaly_detection_pipeline(sample_data, model_type, setup_mlflow):
         for col in FEATURE_COLUMNS:
             assert col in results.columns, f"Required feature column {col} is missing"
             
-        logging.info("All test assertions passed")
+        logger.info("All test assertions passed")
     except Exception as e:
-        logging.error(f"Test failed: {str(e)}")
+        logger.error(f"Test failed: {str(e)}", exc_info=True)
         raise
     finally:
         # Make sure no runs are left active
         try:
             active_run = mlflow.active_run()
             if active_run:
-                logging.info(f"Ending active run after test: {active_run.info.run_id}")
+                logger.warning(f"Found active run at test end: {active_run.info.run_id}")
                 mlflow.end_run()
+                logger.info("Ended active run")
         except Exception as e:
-            logging.warning(f"Error ending active run after test: {str(e)}")
-        logging.info("Test cleanup completed") 
+            logger.error(f"Error ending active run after test: {str(e)}", exc_info=True)
+        logger.info("-" * 80)
+        logger.info(f"Test completed for model type: {model_type}")
+        logger.info("=" * 80) 
