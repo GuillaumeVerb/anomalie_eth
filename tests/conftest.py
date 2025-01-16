@@ -26,16 +26,29 @@ def test_data_dir():
     with tempfile.TemporaryDirectory() as tmp_dir:
         yield Path(tmp_dir)
 
-@pytest.fixture(autouse=True)
-def setup_mlflow(tmp_path):
-    """Set up MLflow tracking for tests."""
-    # Set up MLflow to use a temporary directory
-    mlflow_dir = tmp_path / "mlruns"
-    mlflow.set_tracking_uri(f"file://{mlflow_dir}")
+@pytest.fixture(scope="session")
+def mlflow_tracking_uri(tmp_path_factory):
+    """Create a session-wide MLflow tracking directory."""
+    mlflow_dir = tmp_path_factory.mktemp("mlruns")
+    uri = f"file://{mlflow_dir}"
+    mlflow.set_tracking_uri(uri)
+    yield uri
     
+    # Cleanup at the end of the session
+    try:
+        if mlflow_dir.exists():
+            shutil.rmtree(mlflow_dir)
+    except Exception as e:
+        logging.warning(f"Error cleaning up MLflow directory: {str(e)}")
+
+@pytest.fixture(autouse=True)
+def setup_mlflow(mlflow_tracking_uri):
+    """Set up MLflow tracking for tests."""
     # End any active runs
     try:
-        mlflow.end_run()
+        active_run = mlflow.active_run()
+        if active_run:
+            mlflow.end_run()
     except Exception as e:
         logging.warning(f"Error ending active run: {str(e)}")
     
@@ -45,6 +58,15 @@ def setup_mlflow(tmp_path):
         try:
             existing_exp = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
             if existing_exp:
+                # End all runs in the experiment
+                runs = mlflow.search_runs([existing_exp.experiment_id])
+                for _, run in runs.iterrows():
+                    try:
+                        mlflow.end_run(run.run_id)
+                    except:
+                        pass
+                
+                # Delete the experiment
                 mlflow.delete_experiment(existing_exp.experiment_id)
                 # Wait for deletion to complete
                 time.sleep(1)
@@ -58,9 +80,17 @@ def setup_mlflow(tmp_path):
     
     # Create new experiment
     max_retries = 3
+    experiment_id = None
     for attempt in range(max_retries):
         try:
-            experiment_id = mlflow.create_experiment(EXPERIMENT_NAME)
+            experiment_id = mlflow.create_experiment(
+                EXPERIMENT_NAME,
+                tags={
+                    "test": "true",
+                    "created_by": "pytest",
+                    "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
+                }
+            )
             logging.info(f"Created test experiment with ID: {experiment_id}")
             break
         except Exception as e:
@@ -70,13 +100,23 @@ def setup_mlflow(tmp_path):
             logging.warning(f"Attempt {attempt + 1} to create experiment failed: {str(e)}")
             time.sleep(1)
     
-    yield
+    yield experiment_id
     
     # Cleanup
     try:
-        mlflow.end_run()
-        if mlflow_dir.exists():
-            shutil.rmtree(mlflow_dir)
+        # End any active runs
+        active_run = mlflow.active_run()
+        if active_run:
+            mlflow.end_run()
+        
+        # Delete all runs in the experiment
+        if experiment_id:
+            runs = mlflow.search_runs([experiment_id])
+            for _, run in runs.iterrows():
+                try:
+                    mlflow.end_run(run.run_id)
+                except:
+                    pass
     except Exception as e:
         logging.warning(f"Error during MLflow cleanup: {str(e)}")
 
