@@ -42,33 +42,34 @@ def test_anomaly_detection_pipeline(sample_data, model_type, setup_mlflow):
     except:
         pass
     
-    # Run anomaly detection
-    results = anomaly_detection_pipeline(sample_data, model_type)
-    
-    # Basic checks
-    assert isinstance(results, pd.DataFrame)
-    assert 'anomaly_label' in results.columns
-    
-    # Convert to boolean for consistent comparison
-    anomalies = results['anomaly_label'] == 1
-    
-    # At least one anomaly should be detected (we have outliers)
-    assert anomalies.sum() > 0
-    
-    # The last row should be detected as an anomaly (it's an obvious outlier in all features)
-    assert anomalies.iloc[3]
-    
-    # Check that we didn't lose any data
-    assert len(results) == len(sample_data)
-    
-    # Check that all required feature columns exist
-    for col in FEATURE_COLUMNS:
-        assert col in results.columns, f"Required feature column {col} is missing"
-    
-    # Make sure no runs are left active
     try:
-        active_run = mlflow.active_run()
-        if active_run:
-            mlflow.end_run()
-    except:
-        pass 
+        # Run anomaly detection
+        results = anomaly_detection_pipeline(sample_data, model_type)
+        
+        # Basic checks
+        assert isinstance(results, pd.DataFrame)
+        assert 'anomaly_label' in results.columns
+        
+        # Convert to boolean for consistent comparison
+        anomalies = results['anomaly_label'] == 1
+        
+        # At least one anomaly should be detected (we have outliers)
+        assert anomalies.sum() > 0
+        
+        # The last row should be detected as an anomaly (it's an obvious outlier in all features)
+        assert anomalies.iloc[3]
+        
+        # Check that we didn't lose any data
+        assert len(results) == len(sample_data)
+        
+        # Check that all required feature columns exist
+        for col in FEATURE_COLUMNS:
+            assert col in results.columns, f"Required feature column {col} is missing"
+    finally:
+        # Make sure no runs are left active
+        try:
+            active_run = mlflow.active_run()
+            if active_run:
+                mlflow.end_run()
+        except:
+            pass 

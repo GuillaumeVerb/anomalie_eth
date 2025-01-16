@@ -19,10 +19,15 @@ for dir_path in [DATA_DIR, RAW_DATA_DIR, PROCESSED_DATA_DIR, MODEL_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)
 
 # MLflow configuration
-# To start MLflow UI locally, run: mlflow ui --backend-store-uri sqlite:///mlflow.db
-MLFLOW_TRACKING_URI = "sqlite:///mlflow.db"
+if os.getenv("PYTEST_CURRENT_TEST"):
+    # Use in-memory SQLite for tests
+    MLFLOW_TRACKING_URI = "sqlite:///:memory:"
+else:
+    # Use file-based SQLite for development
+    MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
+
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-EXPERIMENT_NAME = "ethereum_anomaly_detection"
+EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "ethereum_anomaly_detection")
 
 # Ethereum node configuration
 ETH_NODE_URL = os.getenv("ETH_NODE_URL", "https://mainnet.infura.io/v3/your-project-id")
