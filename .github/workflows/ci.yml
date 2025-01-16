@@ -245,7 +245,7 @@ jobs:
         context: .
         push: true
         tags: |
-          ${{ secrets.DOCKERHUB_USERNAME }}/ethereum-anomaly:latest
-          ${{ secrets.DOCKERHUB_USERNAME }}/ethereum-anomaly:${{ github.sha }}
-        cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/ethereum-anomaly:buildcache
-        cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/ethereum-anomaly:buildcache,mode=max 
+          ${{ secrets.DOCKERHUB_USERNAME }}/guillaume_repo:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/guillaume_repo:${{ github.sha }}
+        cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/guillaume_repo:buildcache
+        cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/guillaume_repo:buildcache,mode=max 
