@@ -55,11 +55,13 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
     
     # Initialize predictions as None
     predictions = None
+    run_id = None
     
     try:
         # End any active runs to avoid nested run errors
         active_run = mlflow.active_run()
         if active_run:
+            run_id = active_run.info.run_id
             mlflow.end_run()
         
         # Get experiment
@@ -69,7 +71,11 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
             raise ValueError(f"Experiment {EXPERIMENT_NAME} not found")
             
         # Start MLflow run
-        with mlflow.start_run(experiment_id=experiment.experiment_id) as run:
+        with mlflow.start_run(experiment_id=experiment.experiment_id, run_name="prediction", tags={
+            "run_type": "prediction",
+            "model_type": model_type,
+            "parent_run_id": run_id if run_id else "none"
+        }) as run:
             # Log dataset info
             mlflow.log_param("n_samples", len(data))
             mlflow.log_param("features", FEATURE_COLUMNS)
@@ -107,6 +113,7 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
                     logging.info(f"Silhouette score: {silhouette:.3f}")
             except Exception as e:
                 logging.warning(f"Could not calculate silhouette score: {str(e)}")
+                mlflow.set_tag("silhouette_error", str(e))
                 
             # Log number of anomalies
             n_anomalies = np.sum(predictions)
@@ -130,7 +137,7 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
         # Ensure any active run is ended
         try:
             active_run = mlflow.active_run()
-            if active_run:
+            if active_run and active_run.info.run_id != run_id:
                 mlflow.end_run()
         except Exception as e:
             logging.warning(f"Error ending MLflow run: {str(e)}")
@@ -172,14 +179,14 @@ def tune_isolation_forest(data: pd.DataFrame, param_grid: dict):
         best_params = None
         
         # Grid search
-        with mlflow.start_run(experiment_id=experiment.experiment_id, run_name="IF_tuning") as parent_run:
+        with mlflow.start_run(experiment_id=experiment.experiment_id, run_name="IF_tuning", tags={"run_type": "tuning", "model": "IsolationForest"}) as parent_run:
             mlflow.log_param("model_type", "IsolationForest")
             mlflow.log_param("tuning_params", list(param_grid.keys()))
             mlflow.log_param("n_combinations", len(list(_get_param_combinations(param_grid))))
             
             for i, params in enumerate(_get_param_combinations(param_grid)):
                 run_name = f"IF_trial_{i+1}"
-                with mlflow.start_run(experiment_id=experiment.experiment_id, run_name=run_name, nested=True) as child_run:
+                with mlflow.start_run(experiment_id=experiment.experiment_id, run_name=run_name, nested=True, tags={"run_type": "trial", "model": "IsolationForest", "trial_number": str(i+1)}) as child_run:
                     mlflow.log_params(params)
                     
                     model = IsolationForest(**params)
@@ -197,8 +204,12 @@ def tune_isolation_forest(data: pd.DataFrame, param_grid: dict):
                                 best_score = score
                                 best_params = params.copy()
                                 mlflow.log_metric("best_score_so_far", score)
+                                mlflow.set_tag("is_best", "true")
+                            else:
+                                mlflow.set_tag("is_best", "false")
                     except Exception as e:
                         logging.warning(f"Could not calculate silhouette score for trial {i+1}: {str(e)}")
+                        mlflow.set_tag("error", str(e))
                         continue
                         
                     n_anomalies = np.sum(predictions)
@@ -255,14 +266,14 @@ def tune_dbscan(data: pd.DataFrame, param_grid: dict):
         best_params = None
         
         # Grid search
-        with mlflow.start_run(experiment_id=experiment.experiment_id, run_name="DBSCAN_tuning") as parent_run:
+        with mlflow.start_run(experiment_id=experiment.experiment_id, run_name="DBSCAN_tuning", tags={"run_type": "tuning", "model": "DBSCAN"}) as parent_run:
             mlflow.log_param("model_type", "DBSCAN")
             mlflow.log_param("tuning_params", list(param_grid.keys()))
             mlflow.log_param("n_combinations", len(list(_get_param_combinations(param_grid))))
             
             for i, params in enumerate(_get_param_combinations(param_grid)):
                 run_name = f"DBSCAN_trial_{i+1}"
-                with mlflow.start_run(experiment_id=experiment.experiment_id, run_name=run_name, nested=True) as child_run:
+                with mlflow.start_run(experiment_id=experiment.experiment_id, run_name=run_name, nested=True, tags={"run_type": "trial", "model": "DBSCAN", "trial_number": str(i+1)}) as child_run:
                     mlflow.log_params(params)
                     
                     model = DBSCAN(**params)
@@ -280,8 +291,12 @@ def tune_dbscan(data: pd.DataFrame, param_grid: dict):
                                 best_score = score
                                 best_params = params.copy()
                                 mlflow.log_metric("best_score_so_far", score)
+                                mlflow.set_tag("is_best", "true")
+                            else:
+                                mlflow.set_tag("is_best", "false")
                     except Exception as e:
                         logging.warning(f"Could not calculate silhouette score for trial {i+1}: {str(e)}")
+                        mlflow.set_tag("error", str(e))
                         continue
                         
                     n_anomalies = np.sum(predictions)
