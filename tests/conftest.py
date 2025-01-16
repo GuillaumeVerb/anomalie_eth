@@ -85,6 +85,7 @@ def mlflow_tracking_uri(tmp_path_factory):
 def setup_mlflow(mlflow_tracking_uri):
     """Set up MLflow tracking for tests."""
     logging.info("Setting up MLflow for test")
+    
     # Make sure we start with a clean state
     try:
         active_run = mlflow.active_run()
@@ -112,23 +113,30 @@ def setup_mlflow(mlflow_tracking_uri):
             # Delete the experiment
             logging.info(f"Deleting existing experiment: {existing_exp.experiment_id}")
             mlflow.delete_experiment(existing_exp.experiment_id)
+            time.sleep(1)  # Wait for deletion to complete
     except Exception as e:
         logging.warning(f"Error handling existing experiment: {str(e)}")
     
     # Create new experiment
     try:
-        experiment_id = mlflow.create_experiment(
-            EXPERIMENT_NAME,
-            tags={
-                "test": "true",
-                "created_by": "pytest",
-                "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "test_run": str(time.time())
-            }
-        )
-        logging.info(f"Created new test experiment with ID: {experiment_id}")
+        # Check if experiment exists again (in case deletion failed)
+        existing_exp = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
+        if existing_exp:
+            experiment_id = existing_exp.experiment_id
+            logging.info(f"Using existing experiment: {experiment_id}")
+        else:
+            experiment_id = mlflow.create_experiment(
+                EXPERIMENT_NAME,
+                tags={
+                    "test": "true",
+                    "created_by": "pytest",
+                    "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "test_run": str(time.time())
+                }
+            )
+            logging.info(f"Created new test experiment with ID: {experiment_id}")
     except Exception as e:
-        logging.error(f"Failed to create experiment: {str(e)}")
+        logging.error(f"Failed to create/get experiment: {str(e)}")
         raise
     
     yield experiment_id

@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from src.modeling import anomaly_detection_pipeline
 from src.preprocessing import preprocess_transactions
-from src.config import FEATURE_COLUMNS, RAW_DATA_DIR
+from src.config import FEATURE_COLUMNS, RAW_DATA_DIR, EXPERIMENT_NAME
 import mlflow
 import logging
 
@@ -44,6 +44,16 @@ def test_anomaly_detection_pipeline(sample_data, model_type, setup_mlflow):
     # Log MLflow configuration
     logger.debug(f"MLflow tracking URI: {mlflow.get_tracking_uri()}")
     logger.debug(f"MLflow experiment name: {EXPERIMENT_NAME}")
+    
+    # Make sure we have a valid experiment
+    try:
+        experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
+        if experiment is None:
+            logger.warning(f"Experiment {EXPERIMENT_NAME} not found, creating it")
+            mlflow.create_experiment(EXPERIMENT_NAME)
+    except Exception as e:
+        logger.error(f"Error getting/creating experiment: {str(e)}")
+        raise
     
     # Make sure no runs are active
     try:
