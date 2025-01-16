@@ -58,7 +58,9 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
     
     try:
         # End any active runs to avoid nested run errors
-        mlflow.end_run()
+        active_run = mlflow.active_run()
+        if active_run:
+            mlflow.end_run()
         
         # Get experiment
         experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
@@ -71,6 +73,7 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
             # Log dataset info
             mlflow.log_param("n_samples", len(data))
             mlflow.log_param("features", FEATURE_COLUMNS)
+            mlflow.log_param("model_type", model_type)
             
             if model_type.upper() in ["IF", "ISOLATION_FOREST"]:
                 # Train Isolation Forest
@@ -96,7 +99,9 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
                 
             # Calculate silhouette score if we have both classes
             try:
-                if len(np.unique(predictions)) > 1:
+                unique_labels = np.unique(predictions)
+                mlflow.log_param("unique_labels", list(unique_labels))
+                if len(unique_labels) > 1:
                     silhouette = silhouette_score(X_scaled, predictions)
                     mlflow.log_metric("silhouette_score", silhouette)
                     logging.info(f"Silhouette score: {silhouette:.3f}")
@@ -124,7 +129,9 @@ def anomaly_detection_pipeline(data: pd.DataFrame, model_type: str = "isolation_
     finally:
         # Ensure any active run is ended
         try:
-            mlflow.end_run()
+            active_run = mlflow.active_run()
+            if active_run:
+                mlflow.end_run()
         except Exception as e:
             logging.warning(f"Error ending MLflow run: {str(e)}")
     
@@ -153,40 +160,49 @@ def tune_isolation_forest(data: pd.DataFrame, param_grid: dict):
         # End any active runs to avoid nested run errors
         mlflow.end_run()
         
-        # Create or get experiment
+        # Get experiment
         experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
         if experiment is None:
-            experiment_id = mlflow.create_experiment(EXPERIMENT_NAME)
-        else:
-            experiment_id = experiment.experiment_id
+            logging.error(f"Experiment {EXPERIMENT_NAME} not found")
+            raise ValueError(f"Experiment {EXPERIMENT_NAME} not found")
         
         best_score = -np.inf
         best_params = None
         
         # Grid search
-        for params in _get_param_combinations(param_grid):
-            with mlflow.start_run(experiment_id=experiment_id, nested=True) as run:
-                mlflow.log_params(params)
-                
-                model = IsolationForest(**params)
-                predictions = model.fit_predict(X_scaled)
-                predictions = predictions == -1  # Convert to boolean (True: anomaly, False: normal)
-                
-                try:
-                    if len(np.unique(predictions)) > 1:
-                        score = silhouette_score(X_scaled, predictions)
-                        mlflow.log_metric("silhouette_score", score)
-                        
-                        if score > best_score:
-                            best_score = score
-                            best_params = params
-                except Exception as e:
-                    logging.warning(f"Could not calculate silhouette score: {str(e)}")
-                    continue
+        with mlflow.start_run(experiment_id=experiment.experiment_id) as parent_run:
+            mlflow.log_param("model_type", "IsolationForest")
+            mlflow.log_param("tuning_params", list(param_grid.keys()))
+            
+            for params in _get_param_combinations(param_grid):
+                with mlflow.start_run(experiment_id=experiment.experiment_id, nested=True) as child_run:
+                    mlflow.log_params(params)
                     
-                n_anomalies = np.sum(predictions)
-                mlflow.log_metric("n_anomalies", n_anomalies)
-                mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
+                    model = IsolationForest(**params)
+                    predictions = model.fit_predict(X_scaled)
+                    predictions = predictions == -1  # Convert to boolean (True: anomaly, False: normal)
+                    
+                    try:
+                        if len(np.unique(predictions)) > 1:
+                            score = silhouette_score(X_scaled, predictions)
+                            mlflow.log_metric("silhouette_score", score)
+                            
+                            if score > best_score:
+                                best_score = score
+                                best_params = params
+                                mlflow.log_metric("best_score", score)
+                    except Exception as e:
+                        logging.warning(f"Could not calculate silhouette score: {str(e)}")
+                        continue
+                        
+                    n_anomalies = np.sum(predictions)
+                    mlflow.log_metric("n_anomalies", n_anomalies)
+                    mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
+                    
+            # Log best parameters in parent run
+            if best_params:
+                mlflow.log_params({f"best_{k}": v for k, v in best_params.items()})
+                mlflow.log_metric("final_best_score", best_score)
                 
     except Exception as e:
         logging.warning(f"MLflow tracking failed in tuning: {str(e)}")
@@ -195,7 +211,7 @@ def tune_isolation_forest(data: pd.DataFrame, param_grid: dict):
     finally:
         mlflow.end_run()
             
-    return best_params
+    return best_params or ISOLATION_FOREST_PARAMS
 
 def tune_dbscan(data: pd.DataFrame, param_grid: dict):
     """
@@ -216,40 +232,49 @@ def tune_dbscan(data: pd.DataFrame, param_grid: dict):
         # End any active runs to avoid nested run errors
         mlflow.end_run()
         
-        # Create or get experiment
+        # Get experiment
         experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
         if experiment is None:
-            experiment_id = mlflow.create_experiment(EXPERIMENT_NAME)
-        else:
-            experiment_id = experiment.experiment_id
+            logging.error(f"Experiment {EXPERIMENT_NAME} not found")
+            raise ValueError(f"Experiment {EXPERIMENT_NAME} not found")
         
         best_score = -np.inf
         best_params = None
         
         # Grid search
-        for params in _get_param_combinations(param_grid):
-            with mlflow.start_run(experiment_id=experiment_id, nested=True) as run:
-                mlflow.log_params(params)
-                
-                model = DBSCAN(**params)
-                predictions = model.fit_predict(X_scaled)
-                predictions = predictions == -1  # Convert to boolean (True: anomaly, False: normal)
-                
-                try:
-                    if len(np.unique(predictions)) > 1:
-                        score = silhouette_score(X_scaled, predictions)
-                        mlflow.log_metric("silhouette_score", score)
-                        
-                        if score > best_score:
-                            best_score = score
-                            best_params = params
-                except Exception as e:
-                    logging.warning(f"Could not calculate silhouette score: {str(e)}")
-                    continue
+        with mlflow.start_run(experiment_id=experiment.experiment_id) as parent_run:
+            mlflow.log_param("model_type", "DBSCAN")
+            mlflow.log_param("tuning_params", list(param_grid.keys()))
+            
+            for params in _get_param_combinations(param_grid):
+                with mlflow.start_run(experiment_id=experiment.experiment_id, nested=True) as child_run:
+                    mlflow.log_params(params)
                     
-                n_anomalies = np.sum(predictions)
-                mlflow.log_metric("n_anomalies", n_anomalies)
-                mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
+                    model = DBSCAN(**params)
+                    predictions = model.fit_predict(X_scaled)
+                    predictions = predictions == -1  # Convert to boolean (True: anomaly, False: normal)
+                    
+                    try:
+                        if len(np.unique(predictions)) > 1:
+                            score = silhouette_score(X_scaled, predictions)
+                            mlflow.log_metric("silhouette_score", score)
+                            
+                            if score > best_score:
+                                best_score = score
+                                best_params = params
+                                mlflow.log_metric("best_score", score)
+                    except Exception as e:
+                        logging.warning(f"Could not calculate silhouette score: {str(e)}")
+                        continue
+                        
+                    n_anomalies = np.sum(predictions)
+                    mlflow.log_metric("n_anomalies", n_anomalies)
+                    mlflow.log_metric("anomaly_ratio", n_anomalies / len(predictions))
+                    
+            # Log best parameters in parent run
+            if best_params:
+                mlflow.log_params({f"best_{k}": v for k, v in best_params.items()})
+                mlflow.log_metric("final_best_score", best_score)
                 
     except Exception as e:
         logging.warning(f"MLflow tracking failed in tuning: {str(e)}")
@@ -258,7 +283,7 @@ def tune_dbscan(data: pd.DataFrame, param_grid: dict):
     finally:
         mlflow.end_run()
             
-    return best_params
+    return best_params or DBSCAN_PARAMS
 
 def _get_param_combinations(param_grid):
     """Helper function to get all parameter combinations from a grid"""

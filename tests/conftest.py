@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 import mlflow
 import tempfile
 import logging
+import time
 
 # Add the project root directory to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,23 +34,41 @@ def setup_mlflow(tmp_path):
     mlflow.set_tracking_uri(f"file://{mlflow_dir}")
     
     # End any active runs
-    mlflow.end_run()
+    try:
+        mlflow.end_run()
+    except Exception as e:
+        logging.warning(f"Error ending active run: {str(e)}")
     
     # Delete existing experiment if it exists
-    try:
-        existing_exp = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
-        if existing_exp:
-            mlflow.delete_experiment(existing_exp.experiment_id)
-    except Exception as e:
-        logging.warning(f"Error cleaning up existing experiment: {str(e)}")
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            existing_exp = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
+            if existing_exp:
+                mlflow.delete_experiment(existing_exp.experiment_id)
+                # Wait for deletion to complete
+                time.sleep(1)
+            break
+        except Exception as e:
+            if attempt == max_retries - 1:
+                logging.error(f"Failed to delete experiment after {max_retries} attempts: {str(e)}")
+                raise
+            logging.warning(f"Attempt {attempt + 1} to delete experiment failed: {str(e)}")
+            time.sleep(1)
     
     # Create new experiment
-    try:
-        experiment_id = mlflow.create_experiment(EXPERIMENT_NAME)
-        logging.info(f"Created test experiment with ID: {experiment_id}")
-    except Exception as e:
-        logging.error(f"Failed to create experiment: {str(e)}")
-        raise
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            experiment_id = mlflow.create_experiment(EXPERIMENT_NAME)
+            logging.info(f"Created test experiment with ID: {experiment_id}")
+            break
+        except Exception as e:
+            if attempt == max_retries - 1:
+                logging.error(f"Failed to create experiment after {max_retries} attempts: {str(e)}")
+                raise
+            logging.warning(f"Attempt {attempt + 1} to create experiment failed: {str(e)}")
+            time.sleep(1)
     
     yield
     
