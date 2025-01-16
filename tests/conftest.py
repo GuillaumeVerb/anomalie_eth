@@ -30,7 +30,7 @@ def test_data_dir():
 def mlflow_tracking_uri(tmp_path_factory):
     """Create a session-wide MLflow tracking directory."""
     mlflow_dir = tmp_path_factory.mktemp("mlruns")
-    uri = f"file://{mlflow_dir}"
+    uri = f"sqlite:///{mlflow_dir}/mlflow.db"  # Use SQLite backend instead of file system
     mlflow.set_tracking_uri(uri)
     yield uri
     
@@ -62,7 +62,9 @@ def setup_mlflow(mlflow_tracking_uri):
                 runs = mlflow.search_runs([existing_exp.experiment_id])
                 for _, run in runs.iterrows():
                     try:
-                        mlflow.end_run(run.run_id)
+                        run_info = mlflow.get_run(run.run_id)
+                        if run_info.info.status != "FINISHED":
+                            mlflow.end_run(run.run_id)
                     except:
                         pass
                 
@@ -88,7 +90,8 @@ def setup_mlflow(mlflow_tracking_uri):
                 tags={
                     "test": "true",
                     "created_by": "pytest",
-                    "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
+                    "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "test_run": str(time.time())  # Add unique identifier
                 }
             )
             logging.info(f"Created test experiment with ID: {experiment_id}")
@@ -114,11 +117,22 @@ def setup_mlflow(mlflow_tracking_uri):
             runs = mlflow.search_runs([experiment_id])
             for _, run in runs.iterrows():
                 try:
-                    mlflow.end_run(run.run_id)
+                    run_info = mlflow.get_run(run.run_id)
+                    if run_info.info.status != "FINISHED":
+                        mlflow.end_run(run.run_id)
                 except:
                     pass
+            
+            # Delete the experiment
+            mlflow.delete_experiment(experiment_id)
     except Exception as e:
         logging.warning(f"Error during MLflow cleanup: {str(e)}")
+    finally:
+        # Force end any remaining runs
+        try:
+            mlflow.end_run()
+        except:
+            pass
 
 @pytest.fixture(autouse=True)
 def setup_test_env(test_data_dir, setup_mlflow):
