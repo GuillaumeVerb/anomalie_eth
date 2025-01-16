@@ -4,6 +4,7 @@ import pytest
 from src.modeling import anomaly_detection_pipeline
 from src.preprocessing import preprocess_transactions
 from src.config import FEATURE_COLUMNS, RAW_DATA_DIR
+import mlflow
 
 @pytest.fixture
 def sample_data(setup_test_env):
@@ -31,8 +32,16 @@ def sample_data(setup_test_env):
     return processed_df
 
 @pytest.mark.parametrize("model_type", ["IF", "DBSCAN"])
-def test_anomaly_detection_pipeline(sample_data, model_type):
+def test_anomaly_detection_pipeline(sample_data, model_type, setup_mlflow):
     """Test anomaly detection with different models."""
+    # Make sure no runs are active
+    try:
+        active_run = mlflow.active_run()
+        if active_run:
+            mlflow.end_run()
+    except:
+        pass
+    
     # Run anomaly detection
     results = anomaly_detection_pipeline(sample_data, model_type)
     
@@ -54,4 +63,12 @@ def test_anomaly_detection_pipeline(sample_data, model_type):
     
     # Check that all required feature columns exist
     for col in FEATURE_COLUMNS:
-        assert col in results.columns, f"Required feature column {col} is missing" 
+        assert col in results.columns, f"Required feature column {col} is missing"
+    
+    # Make sure no runs are left active
+    try:
+        active_run = mlflow.active_run()
+        if active_run:
+            mlflow.end_run()
+    except:
+        pass 
