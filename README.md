@@ -158,9 +158,6 @@ Access the MLflow UI at `http://localhost:5000` when running locally.
 4. Push to the branch
 5. Create a Pull Request
 
-## 📜 License
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## 🔗 Links
 - [Documentation](https://github.com/GuillaumeVerb/anomalie_eth/wiki)
 - [Issue Tracker](https://github.com/GuillaumeVerb/anomalie_eth/issues)
